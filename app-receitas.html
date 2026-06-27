@@ -119,6 +119,16 @@ textarea{resize:vertical;min-height:60px;}
 .frete-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:12px;border-top:1px solid var(--creme-dark);}
 .empty{text-align:center;padding:48px;color:var(--cinza);background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);}
 
+.anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
+.anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
+.anexo-box input[type=file]{display:none;}
+.anexo-box .anexo-icon{font-size:30px;line-height:1;}
+.anexo-box .anexo-label{font-size:12px;color:var(--cinza);line-height:1.4;}
+.anexo-box .anexo-label strong{color:var(--texto);}
+.anexo-box .anexo-nome{font-size:12px;font-weight:600;color:var(--verde-light);word-break:break-all;padding:0 8px;}
+.anexo-remove{position:absolute;top:6px;right:9px;font-size:15px;color:var(--erro);background:none;border:none;line-height:1;display:none;}
+.anexo-box.tem-arquivo .anexo-remove{display:block;}
+.anexo-box.tem-arquivo{border-color:var(--verde-light);border-style:solid;background:#fff;}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--verde);color:#fff;padding:13px 18px;border-radius:11px;box-shadow:var(--shadow-lg);font-size:14px;font-weight:600;z-index:300;opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;max-width:340px;}
 .toast.show{opacity:1;transform:none;} .toast.err{background:var(--erro);}
 .loading{position:fixed;inset:0;background:rgba(39,64,31,.7);backdrop-filter:blur(4px);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
@@ -208,8 +218,13 @@ textarea{resize:vertical;min-height:60px;}
           <div class="field"><label>Observação</label><textarea id="f_obs" placeholder="Observações do frete…"></textarea></div>
           <div class="field">
             <label>Anexo do frete (CT-e / nota / manifesto)</label>
-            <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="freteAnexoSel(this)">
-            <div id="fa-info" style="font-size:12px;color:var(--cinza);margin-top:2px"></div>
+            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+              <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="freteAnexoSel(this)">
+              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <span class="anexo-icon">🚚</span>
+              <span class="anexo-label">Clique ou arraste<br><strong>CT-e / Nota / Manifesto</strong></span>
+              <span class="anexo-nome" id="fa-info"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -246,7 +261,15 @@ textarea{resize:vertical;min-height:60px;}
     <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div class="field"><label>Data do recebimento</label><input type="date" id="rec-data"></div>
       <div class="field"><label>Conta / banco</label><input id="rec-conta" placeholder="Onde o valor caiu"></div>
-      <div class="field"><label>Comprovante (opcional)</label><input type="file" id="rec-anexo" accept="image/*,application/pdf"></div>
+      <div class="field"><label>Comprovante (opcional)</label>
+        <div class="anexo-box" style="min-height:78px;padding:14px" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+          <input type="file" id="rec-anexo" accept="image/*,application/pdf" onchange="_boxSet(this)">
+          <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+          <span class="anexo-icon" style="font-size:24px">🧾</span>
+          <span class="anexo-label">Clique ou arraste o comprovante</span>
+          <span class="anexo-nome"></span>
+        </div>
+      </div>
     </div>
     <div style="padding:16px 20px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme)">
       <button class="btn btn-ghost" onclick="fecharReceber()">Cancelar</button>
@@ -309,7 +332,11 @@ async function uploadAnexo(file,pasta){
   if(!r.ok) throw new Error('Falha no upload: '+await r.text());
   return path;
 }
-function freteAnexoSel(input){ pendingFreteAnexo=input.files[0]||null; $('fa-info').textContent=pendingFreteAnexo?'📎 '+pendingFreteAnexo.name:''; }
+function _box(input){ return input.closest('.anexo-box'); }
+function _boxSet(input){ const f=input.files[0]||null; const b=_box(input); if(b){ b.classList.toggle('tem-arquivo',!!f); const n=b.querySelector('.anexo-nome'); if(n)n.textContent=f?('📎 '+f.name):''; } return f; }
+function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
+function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anexo-box').querySelector('input[type=file]'); inp.value=''; inp.dispatchEvent(new Event('change',{bubbles:true})); }
+function freteAnexoSel(input){ pendingFreteAnexo=_boxSet(input); }
 
 /* ===================== AUTOCOMPLETE CLIENTE ===================== */
 let _ddIdx=-1;
@@ -522,7 +549,7 @@ function renderLista(){
 
 function abrirReceber(id){
   receberId=id; $('rec-data').value=new Date().toISOString().slice(0,10);
-  $('rec-conta').value=''; $('rec-anexo').value=''; $('recOverlay').style.display='flex';
+  $('rec-conta').value=''; $('rec-anexo').value=''; _boxSet($('rec-anexo')); $('recOverlay').style.display='flex';
 }
 function fecharReceber(){ $('recOverlay').style.display='none'; receberId=null; }
 async function confirmarReceber(){
@@ -561,7 +588,7 @@ function editarFrete(id){
   $('f_cliente').value=f.cliente||''; $('f_produto').value=f.produto||''; $('f_origem').value=f.origem||''; $('f_destino').value=f.destino||'';
   $('f_placa').value=f.placa||''; $('f_motorista').value=f.motorista||''; $('f_carreg').value=f.data_carregamento||''; $('f_descarreg').value=f.data_descarregamento||'';
   $('f_total').value=f.valor_total||''; $('f_obs').value=f.observacao||'';
-  pendingFreteAnexo=null; $('f_anexo').value=''; $('fa-info').textContent=f.anexo?'📎 anexo atual — envie outro para substituir':'';
+  pendingFreteAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(f.anexo) $('fa-info').textContent='📎 anexo atual — envie outro para substituir';
   $('parcelas-box').innerHTML='';
   const ps=parcelasDe(id);
   if(ps.length) ps.forEach(p=>addParcela(p.tipo,p.valor,p.previsao)); else initParcelas();
@@ -573,7 +600,7 @@ function editarFrete(id){
 function limparForm(){
   editingFrete=null; $('form-title').textContent='Novo frete';
   ['f_cliente','f_produto','f_origem','f_destino','f_placa','f_motorista','f_carreg','f_descarreg','f_total','f_obs'].forEach(id=>$(id).value='');
-  pendingFreteAnexo=null; if($('f_anexo'))$('f_anexo').value=''; if($('fa-info'))$('fa-info').textContent='';
+  pendingFreteAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
   initParcelas(); $('btnSalvar').textContent='✓ Salvar frete';
 }
 

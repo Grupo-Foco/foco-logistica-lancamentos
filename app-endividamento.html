@@ -68,6 +68,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--verde-light);} textar
 .pmoney{font-family:'DM Mono',monospace;text-align:right;} .pst{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;} .pst.ap{color:var(--amber);} .pst.pg{color:var(--sucesso);}
 .div-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:12px;border-top:1px solid var(--creme-dark);}
 .empty{text-align:center;padding:48px;color:var(--cinza);background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);}
+.anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
+.anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
+.anexo-box input[type=file]{display:none;}
+.anexo-box .anexo-icon{font-size:30px;line-height:1;}
+.anexo-box .anexo-label{font-size:12px;color:var(--cinza);line-height:1.4;}
+.anexo-box .anexo-label strong{color:var(--texto);}
+.anexo-box .anexo-nome{font-size:12px;font-weight:600;color:var(--verde-light);word-break:break-all;padding:0 8px;}
+.anexo-remove{position:absolute;top:6px;right:9px;font-size:15px;color:var(--erro);background:none;border:none;line-height:1;display:none;}
+.anexo-box.tem-arquivo .anexo-remove{display:block;}
+.anexo-box.tem-arquivo{border-color:var(--verde-light);border-style:solid;background:#fff;}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--verde);color:#fff;padding:13px 18px;border-radius:11px;box-shadow:var(--shadow-lg);font-size:14px;font-weight:600;z-index:300;opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;}
 .toast.show{opacity:1;transform:none;} .toast.err{background:var(--erro);}
 .loading{position:fixed;inset:0;background:rgba(39,64,31,.7);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;} .loading.hidden{display:none;}
@@ -119,7 +129,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--verde-light);} textar
         <div class="sec-label">03 — Observação & anexo</div>
         <div class="grid two">
           <div class="field"><label>Observação</label><textarea id="f_obs" placeholder="Detalhes do contrato…"></textarea></div>
-          <div class="field"><label>Anexo (contrato / cédula)</label><input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSel(this)"><div id="anexo-info" style="font-size:12px;color:var(--cinza);margin-top:2px"></div></div>
+          <div class="field"><label>Anexo (contrato / cédula)</label>
+            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+              <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSel(this)">
+              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <span class="anexo-icon">📄</span>
+              <span class="anexo-label">Clique ou arraste<br><strong>Contrato / Cédula</strong></span>
+              <span class="anexo-nome" id="anexo-info"></span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="actions">
@@ -151,7 +169,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--verde-light);} textar
     <div style="padding:16px 20px;border-bottom:1px solid var(--creme-dark);font-family:'Syne',sans-serif;font-weight:700;color:var(--verde)">Baixar parcela</div>
     <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div class="field"><label>Data do pagamento</label><input type="date" id="bx-data"></div>
-      <div class="field"><label>Comprovante (opcional)</label><input type="file" id="bx-anexo" accept="image/*,application/pdf"></div>
+      <div class="field"><label>Comprovante (opcional)</label>
+        <div class="anexo-box" style="min-height:78px;padding:14px" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+          <input type="file" id="bx-anexo" accept="image/*,application/pdf" onchange="_boxSet(this)">
+          <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+          <span class="anexo-icon" style="font-size:24px">🧾</span>
+          <span class="anexo-label">Clique ou arraste o comprovante</span>
+          <span class="anexo-nome"></span>
+        </div>
+      </div>
     </div>
     <div style="padding:16px 20px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme)">
       <button class="btn btn-ghost" onclick="fecharBaixa()">Cancelar</button>
@@ -194,7 +220,11 @@ function toast(m,e){ const t=$('toast'); t.textContent=m; t.className='toast sho
 function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 function publicUrl(p){ return p?`${SB_URL}/storage/v1/object/public/comprovantes/${p}`:null; }
 async function uploadAnexo(file,pasta){ if(!file) return null; const ext=(file.name.split('.').pop()||'dat').toLowerCase(); const path=`${pasta}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`; const r=await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'x-upsert':'true'},body:file}); if(!r.ok) throw new Error('Falha no upload: '+await r.text()); return path; }
-function anexoSel(input){ pendingAnexo=input.files[0]||null; $('anexo-info').textContent=pendingAnexo?'📎 '+pendingAnexo.name:''; }
+function _box(input){ return input.closest('.anexo-box'); }
+function _boxSet(input){ const f=input.files[0]||null; const b=_box(input); if(b){ b.classList.toggle('tem-arquivo',!!f); const n=b.querySelector('.anexo-nome'); if(n)n.textContent=f?('📎 '+f.name):''; } return f; }
+function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
+function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anexo-box').querySelector('input[type=file]'); inp.value=''; inp.dispatchEvent(new Event('change',{bubbles:true})); }
+function anexoSel(input){ pendingAnexo=_boxSet(input); }
 
 let dividasBD=[], parcelasBD=[], caminhoesBD=[], editing=null, pendingAnexo=null, baixaId=null;
 
@@ -307,7 +337,7 @@ function renderLista(){
   }).join('');
 }
 
-function abrirBaixa(id){ baixaId=id; $('bx-data').value=new Date().toISOString().slice(0,10); $('bx-anexo').value=''; $('bxOverlay').style.display='flex'; }
+function abrirBaixa(id){ baixaId=id; $('bx-data').value=new Date().toISOString().slice(0,10); $('bx-anexo').value=''; _boxSet($('bx-anexo')); $('bxOverlay').style.display='flex'; }
 function fecharBaixa(){ $('bxOverlay').style.display='none'; baixaId=null; }
 async function confirmarBaixa(){
   const data=$('bx-data').value; if(!data){ toast('Informe a data.',true); return; }
@@ -331,14 +361,14 @@ function editar(id){
   $('form-title').textContent='Editar dívida #'+id;
   $('f_desc').value=d.descricao||''; $('f_credor').value=d.credor||''; $('f_placa').value=d.placa||'';
   $('f_total').value=d.valor_total||''; $('f_parcelas').value=d.qtd_parcelas||1; $('f_taxa').value=d.taxa_juros||''; $('f_inicio').value=d.data_inicio||'';
-  $('f_obs').value=d.observacao||''; pendingAnexo=null; $('f_anexo').value=''; $('anexo-info').textContent=d.anexo?'📎 anexo atual — envie outro para substituir':'';
+  $('f_obs').value=d.observacao||''; pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.anexo) $('anexo-info').textContent='📎 anexo atual — envie outro para substituir';
   $('btnSalvar').textContent='✓ Atualizar dívida'; showView('novo'); window.scrollTo({top:0});
   toast('Atenção: salvar recria as parcelas desta dívida.');
 }
 function limparForm(){
   editing=null; $('form-title').textContent='Nova dívida';
   ['f_desc','f_credor','f_placa','f_total','f_taxa','f_inicio','f_obs'].forEach(id=>$(id).value=''); $('f_parcelas').value=12;
-  pendingAnexo=null; if($('f_anexo'))$('f_anexo').value=''; if($('anexo-info'))$('anexo-info').textContent='';
+  pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
   $('btnSalvar').textContent='✓ Salvar dívida';
 }
 function showView(v){ document.querySelectorAll('.view').forEach(el=>el.classList.remove('active')); $('view-'+v).classList.add('active'); $('tab-novo').classList.toggle('active',v==='novo'); $('tab-painel').classList.toggle('active',v==='painel'); }
