@@ -203,8 +203,15 @@ textarea{resize:vertical;min-height:60px;}
       </div>
 
       <div class="section">
-        <div class="sec-label">04 — Observação</div>
-        <div class="field"><textarea id="f_obs" placeholder="Observações do frete…"></textarea></div>
+        <div class="sec-label">04 — Observação & anexo</div>
+        <div class="grid two">
+          <div class="field"><label>Observação</label><textarea id="f_obs" placeholder="Observações do frete…"></textarea></div>
+          <div class="field">
+            <label>Anexo do frete (CT-e / nota / manifesto)</label>
+            <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="freteAnexoSel(this)">
+            <div id="fa-info" style="font-size:12px;color:var(--cinza);margin-top:2px"></div>
+          </div>
+        </div>
       </div>
 
       <div class="actions">
@@ -225,9 +232,26 @@ textarea{resize:vertical;min-height:60px;}
       <div class="field"><label>Status do frete</label><select id="flt-status" onchange="renderLista()"><option value="">Todos</option><option value="EM_ANDAMENTO">Em andamento</option><option value="CONCLUIDO">Concluído</option><option value="CANCELADO">Cancelado</option></select></div>
       <div class="field"><label>Placa</label><select id="flt-placa" onchange="renderLista()"><option value="">Todas</option></select></div>
       <div class="field"><label>Recebimento</label><select id="flt-receb" onchange="renderLista()"><option value="">Todos</option><option value="PREVISTA">Tem parcela a receber</option><option value="RECEBIDA">Tudo recebido</option></select></div>
+      <div class="field"><label>Data de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
+      <div class="field"><label>Data até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
     </div>
     <div id="fretes-box"></div>
+  </div>
+</div>
+
+<div id="recOverlay" style="display:none;position:fixed;inset:0;background:rgba(39,64,31,.5);backdrop-filter:blur(3px);z-index:400;align-items:flex-start;justify-content:center;padding:46px 16px;">
+  <div style="background:#fff;border-radius:16px;max-width:430px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--creme-dark);font-family:'Syne',sans-serif;font-weight:700;color:var(--verde)">Registrar recebimento</div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div class="field"><label>Data do recebimento</label><input type="date" id="rec-data"></div>
+      <div class="field"><label>Conta / banco</label><input id="rec-conta" placeholder="Onde o valor caiu"></div>
+      <div class="field"><label>Comprovante (opcional)</label><input type="file" id="rec-anexo" accept="image/*,application/pdf"></div>
+    </div>
+    <div style="padding:16px 20px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme)">
+      <button class="btn btn-ghost" onclick="fecharReceber()">Cancelar</button>
+      <button class="btn btn-primary" id="rec-btn" onclick="confirmarReceber()">Confirmar</button>
+    </div>
   </div>
 </div>
 
@@ -274,7 +298,18 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let fretesBD=[], parcelasBD=[], clientesBD=[], caminhoesBD=[], motoristasBD=[];
-let editingFrete=null;
+let editingFrete=null, pendingFreteAnexo=null, receberId=null;
+
+function publicUrl(p){ return p?`${SB_URL}/storage/v1/object/public/comprovantes/${p}`:null; }
+async function uploadAnexo(file,pasta){
+  if(!file) return null;
+  const ext=(file.name.split('.').pop()||'dat').toLowerCase();
+  const path=`${pasta}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const r=await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'x-upsert':'true'},body:file});
+  if(!r.ok) throw new Error('Falha no upload: '+await r.text());
+  return path;
+}
+function freteAnexoSel(input){ pendingFreteAnexo=input.files[0]||null; $('fa-info').textContent=pendingFreteAnexo?'📎 '+pendingFreteAnexo.name:''; }
 
 /* ===================== AUTOCOMPLETE CLIENTE ===================== */
 let _ddIdx=-1;
@@ -388,6 +423,9 @@ async function salvar(){
 
   const btn=$('btnSalvar'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync');
   try{
+    let anexoPath = editingFrete ? ((fretesBD.find(x=>x.id===editingFrete)||{}).anexo||null) : null;
+    if(pendingFreteAnexo) anexoPath = await uploadAnexo(pendingFreteAnexo,'fretes');
+    header.anexo = anexoPath;
     await salvarClienteSeNovo(header.cliente);
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(header.motorista);
@@ -417,11 +455,17 @@ async function salvarMotoristaSeNovo(nome){ if(!nome) return; if(motoristasBD.so
 /* ===================== PAINEL ===================== */
 function filtrar(){
   const q=($('flt-busca').value||'').toLowerCase(), st=$('flt-status').value, pl=$('flt-placa').value, rc=$('flt-receb').value;
+  const de=$('flt-de').value, ate=$('flt-ate').value;
   return fretesBD.filter(f=>{
     if(st && f.status!==st) return false;
     if(pl && f.placa!==pl) return false;
     if(q){ const hay=`${f.codigo||''} ${f.cliente||''} ${f.origem||''} ${f.destino||''} ${f.placa||''}`.toLowerCase(); if(!hay.includes(q)) return false; }
     if(rc){ const ps=parcelasDe(f.id); const temPrev=ps.some(p=>p.status==='PREVISTA'); if(rc==='PREVISTA'&&!temPrev)return false; if(rc==='RECEBIDA'&&(temPrev||!ps.length))return false; }
+    if(de||ate){
+      const datas=[f.data_carregamento, f.data_descarregamento, ...parcelasDe(f.id).flatMap(p=>[p.previsao,p.data_recebimento])].filter(Boolean).map(x=>String(x).slice(0,10));
+      const inRange = datas.some(x => (!de||x>=de) && (!ate||x<=ate));
+      if(!inRange) return false;
+    }
     return true;
   });
 }
@@ -452,8 +496,8 @@ function renderLista(){
         <td class="pmoney">${money(p.valor)}</td>
         <td><span class="pst ${p.status==='RECEBIDA'?'rec':'prev'}">${p.status==='RECEBIDA'?'RECEBIDA '+(p.data_recebimento?fdate(p.data_recebimento):''):'PREVISTA'}</span></td>
         <td style="text-align:right">${p.status==='PREVISTA'
-            ? `<button class="btn btn-sm btn-primary" onclick="receber(${p.id})">Receber</button>`
-            : `<button class="btn btn-sm btn-ghost" onclick="estornar(${p.id})">Estornar</button>`}</td>
+            ? `<button class="btn btn-sm btn-primary" onclick="abrirReceber(${p.id})">Receber</button>`
+            : `${p.comprovante?`<a href="${publicUrl(p.comprovante)}" target="_blank" class="mono" style="color:var(--verde-light);font-size:11px;text-decoration:none;margin-right:8px">📎</a>`:''}<button class="btn btn-sm btn-ghost" onclick="estornar(${p.id})">Estornar</button>`}</td>
       </tr>`).join('') : `<tr><td colspan="5" style="color:var(--cinza);padding:10px 6px">Sem parcelas.</td></tr>`;
     return `<div class="frete">
       <div class="frete-top">
@@ -466,6 +510,7 @@ function renderLista(){
       <div class="frete-body">
         <table class="ptable"><thead><tr><th>Parcela</th><th>Previsão</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>
         <div class="frete-actions">
+          ${f.anexo?`<a href="${publicUrl(f.anexo)}" target="_blank" class="btn btn-sm btn-ghost" style="text-decoration:none">📎 Anexo</a>`:''}
           <button class="btn btn-sm btn-ghost" onclick="editarFrete(${f.id})">Editar</button>
           ${f.status!=='CONCLUIDO'?`<button class="btn btn-sm btn-marrom" onclick="concluir(${f.id})">Concluir frete</button>`:`<button class="btn btn-sm btn-ghost" onclick="reabrir(${f.id})">Reabrir</button>`}
           ${canDel?`<button class="btn btn-sm btn-danger" onclick="excluirFrete(${f.id})">Excluir</button>`:''}
@@ -475,13 +520,22 @@ function renderLista(){
   }).join('');
 }
 
-async function receber(id){
-  const p=parcelasBD.find(x=>x.id===id); if(!p) return;
-  const data=prompt('Data do recebimento (AAAA-MM-DD):',new Date().toISOString().slice(0,10)); if(!data) return;
-  const conta=prompt('Conta / banco:','')||null;
-  setSync('sync');
-  try{ await sb(`receita_parcelas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'RECEBIDA',data_recebimento:data,conta})}); toast('Recebimento registrado.'); setSync('online'); await carregar(); }
-  catch(e){ setSync('err'); toast('Erro ao registrar.',true); }
+function abrirReceber(id){
+  receberId=id; $('rec-data').value=new Date().toISOString().slice(0,10);
+  $('rec-conta').value=''; $('rec-anexo').value=''; $('recOverlay').style.display='flex';
+}
+function fecharReceber(){ $('recOverlay').style.display='none'; receberId=null; }
+async function confirmarReceber(){
+  const data=$('rec-data').value; if(!data){ toast('Informe a data.',true); return; }
+  const conta=$('rec-conta').value.trim()||null; const file=$('rec-anexo').files[0]||null;
+  const btn=$('rec-btn'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync');
+  try{
+    let comp=null; if(file) comp=await uploadAnexo(file,'recebimentos');
+    const patch={status:'RECEBIDA',data_recebimento:data,conta}; if(comp) patch.comprovante=comp;
+    await sb(`receita_parcelas?id=eq.${receberId}`,{method:'PATCH',body:JSON.stringify(patch)});
+    toast('Recebimento registrado.'); setSync('online'); fecharReceber(); await carregar();
+  }catch(e){ setSync('err'); toast('Erro: '+e.message,true); }
+  finally{ btn.disabled=false; btn.textContent='Confirmar'; }
 }
 async function estornar(id){
   if(!confirm('Estornar este recebimento (voltar para previsto)?')) return;
@@ -507,6 +561,7 @@ function editarFrete(id){
   $('f_cliente').value=f.cliente||''; $('f_produto').value=f.produto||''; $('f_origem').value=f.origem||''; $('f_destino').value=f.destino||'';
   $('f_placa').value=f.placa||''; $('f_motorista').value=f.motorista||''; $('f_carreg').value=f.data_carregamento||''; $('f_descarreg').value=f.data_descarregamento||'';
   $('f_total').value=f.valor_total||''; $('f_obs').value=f.observacao||'';
+  pendingFreteAnexo=null; $('f_anexo').value=''; $('fa-info').textContent=f.anexo?'📎 anexo atual — envie outro para substituir':'';
   $('parcelas-box').innerHTML='';
   const ps=parcelasDe(id);
   if(ps.length) ps.forEach(p=>addParcela(p.tipo,p.valor,p.previsao)); else initParcelas();
@@ -518,6 +573,7 @@ function editarFrete(id){
 function limparForm(){
   editingFrete=null; $('form-title').textContent='Novo frete';
   ['f_cliente','f_produto','f_origem','f_destino','f_placa','f_motorista','f_carreg','f_descarreg','f_total','f_obs'].forEach(id=>$(id).value='');
+  pendingFreteAnexo=null; if($('f_anexo'))$('f_anexo').value=''; if($('fa-info'))$('fa-info').textContent='';
   initParcelas(); $('btnSalvar').textContent='✓ Salvar frete';
 }
 

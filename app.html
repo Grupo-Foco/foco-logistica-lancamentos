@@ -248,8 +248,15 @@ tbody tr:hover{background:var(--creme);}
 
       <!-- 05 -->
       <div class="section">
-        <div class="sec-label">05 — Observação</div>
-        <div class="field"><textarea id="f_historico" placeholder="Detalhes do gasto, local, etc."></textarea></div>
+        <div class="sec-label">05 — Observação & anexo</div>
+        <div class="grid two">
+          <div class="field"><label>Observação</label><textarea id="f_historico" placeholder="Detalhes do gasto, local, etc."></textarea></div>
+          <div class="field">
+            <label>Anexo (NF / recibo / comprovante)</label>
+            <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSelecionado(this)">
+            <div id="anexo-info" style="font-size:12px;color:var(--cinza);margin-top:2px"></div>
+          </div>
+        </div>
       </div>
 
       <div class="actions">
@@ -272,6 +279,8 @@ tbody tr:hover{background:var(--creme);}
       <div class="field"><label>Status</label><select id="flt-status" onchange="renderLista()"><option value="">Todos</option><option value="A_PAGAR">A pagar</option><option value="PAGO">Pago</option></select></div>
       <div class="field"><label>Placa</label><select id="flt-placa" onchange="renderLista()"><option value="">Todas</option></select></div>
       <div class="field"><label>Tipo</label><select id="flt-tipo" onchange="renderLista()"><option value="">Todos</option></select></div>
+      <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
+      <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
     </div>
 
@@ -342,7 +351,18 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let despesas=[], caminhoesBD=[], fornecedoresBD=[], motoristasBD=[], fretesBD=[];
-let editingId=null, statusAtual='A_PAGAR';
+let editingId=null, statusAtual='A_PAGAR', pendingAnexo=null;
+
+function publicUrl(p){ return p?`${SB_URL}/storage/v1/object/public/comprovantes/${p}`:null; }
+async function uploadAnexo(file,pasta){
+  if(!file) return null;
+  const ext=(file.name.split('.').pop()||'dat').toLowerCase();
+  const path=`${pasta}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const r=await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'x-upsert':'true'},body:file});
+  if(!r.ok) throw new Error('Falha no upload: '+await r.text());
+  return path;
+}
+function anexoSelecionado(input){ pendingAnexo=input.files[0]||null; $('anexo-info').textContent=pendingAnexo?'📎 '+pendingAnexo.name:''; }
 
 /* ===================== STATUS TOGGLE ===================== */
 function setStatus(s){
@@ -438,6 +458,9 @@ async function salvar(){
 
   const btn=$('btnSalvar'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync');
   try{
+    let anexoPath = editingId ? ((despesas.find(x=>x.id===editingId)||{}).nf||null) : null;
+    if(pendingAnexo) anexoPath = await uploadAnexo(pendingAnexo,'despesas');
+    base.nf = anexoPath;
     await salvarFornecedorSeNovo(forn.toUpperCase(), $('f_cnpj').value.trim());
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(base.motorista);
@@ -488,10 +511,13 @@ async function salvarMotoristaSeNovo(nome){
 /* ===================== LISTA / PAINEL ===================== */
 function filtrar(){
   const q=($('flt-busca').value||'').toLowerCase(), st=$('flt-status').value, pl=$('flt-placa').value, tp=$('flt-tipo').value;
+  const de=$('flt-de').value, ate=$('flt-ate').value;
   return despesas.filter(d=>{
     if(st && d.status!==st) return false;
     if(pl && d.placa!==pl) return false;
     if(tp && d.tipo_despesa!==tp) return false;
+    if(de && (d.vencimento||'') < de) return false;
+    if(ate && (d.vencimento||'') > ate) return false;
     if(q){ const hay=`${d.fornecedor||''} ${d.documento||''} ${d.motorista||''} ${d.historico||''}`.toLowerCase(); if(!hay.includes(q)) return false; }
     return true;
   });
@@ -511,7 +537,7 @@ function renderLista(){
   if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; return; }
   tb.innerHTML=list.map(d=>`<tr>
     <td class="mono">${fdate(d.vencimento)}</td>
-    <td><b>${esc(d.fornecedor||'—')}</b>${d.documento?`<div class="mono" style="color:var(--cinza);font-size:11px">${esc(d.documento)}</div>`:''}</td>
+    <td><b>${esc(d.fornecedor||'—')}</b>${d.documento?`<div class="mono" style="color:var(--cinza);font-size:11px">${esc(d.documento)}</div>`:''}${d.nf?`<a href="${publicUrl(d.nf)}" target="_blank" class="mono" style="color:var(--verde-light);font-size:11px;text-decoration:none">📎 anexo</a>`:''}</td>
     <td><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
     <td class="mono">${esc(d.placa||'—')}</td>
     <td class="val">${money(d.valor)}</td>
@@ -544,6 +570,7 @@ function editar(id){
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
+  pendingAnexo=null; $('f_anexo').value=''; $('anexo-info').textContent=d.nf?'📎 anexo atual — envie outro para substituir':'';
   $('btnSalvar').textContent='✓ Atualizar';
   showView('novo'); window.scrollTo({top:0});
 }
@@ -559,6 +586,7 @@ function limparForm(){
   editingId=null;
   ['f_tipo','f_fornecedor','f_cnpj','f_documento','f_pix','f_placa','f_motorista','f_frete','f_data_doc','f_vencimento','f_pagamento','f_valor','f_conta','f_historico'].forEach(id=>$(id).value='');
   $('f_parcelas').value=1; $('f_parcelas').disabled=false; $('f_forma').value='PIX';
+  pendingAnexo=null; if($('f_anexo'))$('f_anexo').value=''; if($('anexo-info'))$('anexo-info').textContent='';
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
 }
 
