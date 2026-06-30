@@ -115,6 +115,16 @@ tbody tr:hover{background:var(--creme);}
 .row-actions{display:flex;gap:6px;}
 
 /* toast / loading */
+.anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
+.anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
+.anexo-box input[type=file]{display:none;}
+.anexo-box .anexo-icon{font-size:30px;line-height:1;}
+.anexo-box .anexo-label{font-size:12px;color:var(--cinza);line-height:1.4;}
+.anexo-box .anexo-label strong{color:var(--texto);}
+.anexo-box .anexo-nome{font-size:12px;font-weight:600;color:var(--verde-light);word-break:break-all;padding:0 8px;}
+.anexo-remove{position:absolute;top:6px;right:9px;font-size:15px;color:var(--erro);background:none;border:none;line-height:1;display:none;}
+.anexo-box.tem-arquivo .anexo-remove{display:block;}
+.anexo-box.tem-arquivo{border-color:var(--verde-light);border-style:solid;background:#fff;}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--verde);color:#fff;padding:13px 18px;border-radius:11px;box-shadow:var(--shadow-lg);font-size:14px;font-weight:600;z-index:300;opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;max-width:340px;}
 .toast.show{opacity:1;transform:none;}
 .toast.err{background:var(--erro);}
@@ -170,7 +180,7 @@ tbody tr:hover{background:var(--creme);}
               <option>COMBUSTÍVEL</option><option>PEDÁGIO</option><option>MANUTENÇÃO</option>
               <option>BORRACHARIA</option><option>PNEU</option><option>ALIMENTAÇÃO</option>
               <option>HOSPEDAGEM</option><option>LAVAGEM</option><option>DOCUMENTAÇÃO</option>
-              <option>REEMBOLSO</option><option>OUTROS</option>
+              <option>SALÁRIO</option><option>REEMBOLSO</option><option>OUTROS</option>
             </select>
           </div>
           <div class="field span2">
@@ -253,8 +263,13 @@ tbody tr:hover{background:var(--creme);}
           <div class="field"><label>Observação</label><textarea id="f_historico" placeholder="Detalhes do gasto, local, etc."></textarea></div>
           <div class="field">
             <label>Anexo (NF / recibo / comprovante)</label>
-            <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSelecionado(this)">
-            <div id="anexo-info" style="font-size:12px;color:var(--cinza);margin-top:2px"></div>
+            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+              <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSelecionado(this)">
+              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <span class="anexo-icon">🧾</span>
+              <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Comprovante</strong></span>
+              <span class="anexo-nome" id="anexo-info"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -362,7 +377,11 @@ async function uploadAnexo(file,pasta){
   if(!r.ok) throw new Error('Falha no upload: '+await r.text());
   return path;
 }
-function anexoSelecionado(input){ pendingAnexo=input.files[0]||null; $('anexo-info').textContent=pendingAnexo?'📎 '+pendingAnexo.name:''; }
+function _box(input){ return input.closest('.anexo-box'); }
+function _boxSet(input){ const f=input.files[0]||null; const b=_box(input); if(b){ b.classList.toggle('tem-arquivo',!!f); const n=b.querySelector('.anexo-nome'); if(n)n.textContent=f?('📎 '+f.name):''; } return f; }
+function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
+function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anexo-box').querySelector('input[type=file]'); inp.value=''; inp.dispatchEvent(new Event('change',{bubbles:true})); }
+function anexoSelecionado(input){ pendingAnexo=_boxSet(input); }
 
 /* ===================== STATUS TOGGLE ===================== */
 function setStatus(s){
@@ -570,7 +589,7 @@ function editar(id){
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
-  pendingAnexo=null; $('f_anexo').value=''; $('anexo-info').textContent=d.nf?'📎 anexo atual — envie outro para substituir':'';
+  pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 anexo atual — envie outro para substituir';
   $('btnSalvar').textContent='✓ Atualizar';
   showView('novo'); window.scrollTo({top:0});
 }
@@ -586,7 +605,7 @@ function limparForm(){
   editingId=null;
   ['f_tipo','f_fornecedor','f_cnpj','f_documento','f_pix','f_placa','f_motorista','f_frete','f_data_doc','f_vencimento','f_pagamento','f_valor','f_conta','f_historico'].forEach(id=>$(id).value='');
   $('f_parcelas').value=1; $('f_parcelas').disabled=false; $('f_forma').value='PIX';
-  pendingAnexo=null; if($('f_anexo'))$('f_anexo').value=''; if($('anexo-info'))$('anexo-info').textContent='';
+  pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
 }
 
