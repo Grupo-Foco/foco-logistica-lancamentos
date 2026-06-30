@@ -258,16 +258,28 @@ tbody tr:hover{background:var(--creme);}
 
       <!-- 05 -->
       <div class="section">
-        <div class="sec-label">05 — Observação & anexo</div>
+        <div class="sec-label">05 — Observação</div>
+        <div class="field"><textarea id="f_historico" placeholder="Detalhes do gasto, local, etc."></textarea></div>
+      </div>
+      <!-- 06 -->
+      <div class="section">
+        <div class="sec-label">06 — Anexos · boleto & nota fiscal</div>
         <div class="grid two">
-          <div class="field"><label>Observação</label><textarea id="f_historico" placeholder="Detalhes do gasto, local, etc."></textarea></div>
-          <div class="field">
-            <label>Anexo (NF / recibo / comprovante)</label>
+          <div class="field"><label>Boleto</label>
+            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+              <input type="file" id="f_boleto" accept="image/*,application/pdf" onchange="boletoSelecionado(this)">
+              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <span class="anexo-icon">🏦</span>
+              <span class="anexo-label">Clique ou arraste<br><strong>Boleto</strong> — PDF ou Imagem</span>
+              <span class="anexo-nome" id="boleto-info"></span>
+            </div>
+          </div>
+          <div class="field"><label>Nota fiscal / recibo</label>
             <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
               <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSelecionado(this)">
               <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
               <span class="anexo-icon">🧾</span>
-              <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Comprovante</strong></span>
+              <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Contrato</strong></span>
               <span class="anexo-nome" id="anexo-info"></span>
             </div>
           </div>
@@ -366,7 +378,7 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let despesas=[], caminhoesBD=[], fornecedoresBD=[], motoristasBD=[], fretesBD=[];
-let editingId=null, statusAtual='A_PAGAR', pendingAnexo=null;
+let editingId=null, statusAtual='A_PAGAR', pendingAnexo=null, pendingBoleto=null;
 
 function publicUrl(p){ return p?`${SB_URL}/storage/v1/object/public/comprovantes/${p}`:null; }
 async function uploadAnexo(file,pasta){
@@ -382,6 +394,7 @@ function _boxSet(input){ const f=input.files[0]||null; const b=_box(input); if(b
 function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
 function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anexo-box').querySelector('input[type=file]'); inp.value=''; inp.dispatchEvent(new Event('change',{bubbles:true})); }
 function anexoSelecionado(input){ pendingAnexo=_boxSet(input); }
+function boletoSelecionado(input){ pendingBoleto=_boxSet(input); }
 
 /* ===================== STATUS TOGGLE ===================== */
 function setStatus(s){
@@ -477,9 +490,11 @@ async function salvar(){
 
   const btn=$('btnSalvar'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync');
   try{
-    let anexoPath = editingId ? ((despesas.find(x=>x.id===editingId)||{}).nf||null) : null;
-    if(pendingAnexo) anexoPath = await uploadAnexo(pendingAnexo,'despesas');
-    base.nf = anexoPath;
+    const orig = editingId ? (despesas.find(x=>x.id===editingId)||{}) : {};
+    let nfPath = orig.nf||null, boletoPath = orig.boleto||null;
+    if(pendingAnexo)  nfPath     = await uploadAnexo(pendingAnexo,'despesas-nf');
+    if(pendingBoleto) boletoPath = await uploadAnexo(pendingBoleto,'despesas-boleto');
+    base.nf = nfPath; base.boleto = boletoPath;
     await salvarFornecedorSeNovo(forn.toUpperCase(), $('f_cnpj').value.trim());
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(base.motorista);
@@ -556,7 +571,7 @@ function renderLista(){
   if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; return; }
   tb.innerHTML=list.map(d=>`<tr>
     <td class="mono">${fdate(d.vencimento)}</td>
-    <td><b>${esc(d.fornecedor||'—')}</b>${d.documento?`<div class="mono" style="color:var(--cinza);font-size:11px">${esc(d.documento)}</div>`:''}${d.nf?`<a href="${publicUrl(d.nf)}" target="_blank" class="mono" style="color:var(--verde-light);font-size:11px;text-decoration:none">📎 anexo</a>`:''}</td>
+    <td><b>${esc(d.fornecedor||'—')}</b>${d.documento?`<div class="mono" style="color:var(--cinza);font-size:11px">${esc(d.documento)}</div>`:''}<span style="display:flex;gap:8px">${d.boleto?`<a href="${publicUrl(d.boleto)}" target="_blank" class="mono" style="color:var(--marrom);font-size:11px;text-decoration:none">🏦 boleto</a>`:''}${d.nf?`<a href="${publicUrl(d.nf)}" target="_blank" class="mono" style="color:var(--verde-light);font-size:11px;text-decoration:none">📎 NF</a>`:''}</span></td>
     <td><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
     <td class="mono">${esc(d.placa||'—')}</td>
     <td class="val">${money(d.valor)}</td>
@@ -589,7 +604,8 @@ function editar(id){
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
-  pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 anexo atual — envie outro para substituir';
+  pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 NF atual — envie outro para substituir';
+  pendingBoleto=null; $('f_boleto').value=''; _boxSet($('f_boleto')); if(d.boleto) $('boleto-info').textContent='🏦 boleto atual — envie outro para substituir';
   $('btnSalvar').textContent='✓ Atualizar';
   showView('novo'); window.scrollTo({top:0});
 }
@@ -606,6 +622,7 @@ function limparForm(){
   ['f_tipo','f_fornecedor','f_cnpj','f_documento','f_pix','f_placa','f_motorista','f_frete','f_data_doc','f_vencimento','f_pagamento','f_valor','f_conta','f_historico'].forEach(id=>$(id).value='');
   $('f_parcelas').value=1; $('f_parcelas').disabled=false; $('f_forma').value='PIX';
   pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
+  pendingBoleto=null; if($('f_boleto')){$('f_boleto').value=''; _boxSet($('f_boleto'));}
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
 }
 
