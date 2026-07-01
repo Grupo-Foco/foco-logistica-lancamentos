@@ -101,20 +101,45 @@ textarea{resize:vertical;min-height:64px;}
 .kpi .v{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--verde);margin-top:4px;}
 .tbl-wrap{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;overflow-x:auto;}
 table{width:100%;border-collapse:collapse;}
-thead th{background:var(--verde);color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:11px 12px;text-align:left;white-space:nowrap;}
-tbody td{padding:11px 12px;border-bottom:1px solid var(--creme-dark);font-size:13.5px;}
+thead th{background:var(--verde);color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:12px 16px;text-align:left;white-space:nowrap;}
+tbody td{padding:13px 16px;border-bottom:1px solid var(--creme-dark);font-size:13.5px;vertical-align:middle;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--creme);}
+tbody tr.sel-row{background:#eef3e7;}
+tbody tr.sel-row:hover{background:#e7efdd;}
+td.nowrap,th.nowrap{white-space:nowrap;}
+.chk-cell{width:38px;text-align:center;padding-right:0;}
+.chk-cell input,thead .chk-cell input{width:16px;height:16px;cursor:pointer;accent-color:var(--verde-light);}
+.forn-cell{min-width:210px;}
+.forn-nome{font-weight:700;line-height:1.25;}
+.forn-doc{font-family:'DM Mono',monospace;color:var(--cinza);font-size:11px;margin-top:1px;}
+.anx-row{display:flex;gap:6px;margin-top:5px;}
+.anx-link{font-family:'DM Mono',monospace;font-size:10.5px;text-decoration:none;background:var(--creme-dark);color:var(--marrom-dark);padding:2px 7px;border-radius:5px;}
+.anx-link.nf{background:#e7eede;color:var(--verde-mid);}
+.anx-link:hover{filter:brightness(.95);}
 .mono{font-family:'DM Mono',monospace;font-size:12.5px;}
-.val{font-family:'DM Mono',monospace;font-weight:500;text-align:right;white-space:nowrap;}
+.val{font-family:'DM Mono',monospace;font-weight:600;text-align:right;white-space:nowrap;font-size:14px;}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;}
 .badge.apagar{background:var(--amber-bg);color:var(--amber);}
 .badge.pago{background:#dcecdf;color:var(--sucesso);}
-.tipo-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:var(--creme-dark);color:var(--marrom-dark);}
+.tipo-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:var(--creme-dark);color:var(--marrom-dark);white-space:nowrap;}
+.rateio-tag{font-size:9px;background:var(--amber-bg);color:var(--amber);padding:1px 5px;border-radius:5px;font-family:'DM Mono',monospace;margin-left:4px;}
 .empty{text-align:center;padding:48px;color:var(--cinza);}
-.row-actions{display:flex;gap:6px;}
+.row-actions{display:flex;gap:6px;justify-content:flex-end;}
+.sel-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--verde);color:#fff;border-radius:12px;padding:12px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
+.sel-bar .sel-info{font-size:14px;} .sel-bar .sel-info b{font-family:'Syne',sans-serif;font-size:16px;}
+.sel-bar .btn-ghost{color:#fff;border-color:rgba(255,255,255,.4);background:transparent;}
+.sel-bar .btn-ghost:hover{background:rgba(255,255,255,.12);}
 
 /* toast / loading */
+.switch{display:inline-flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--marrom-dark);cursor:pointer;text-transform:uppercase;letter-spacing:.05em;margin-top:9px;font-weight:500;}
+.switch input{width:auto;cursor:pointer;}
+.rateio-box{margin-top:16px;padding:16px;background:var(--creme);border:1.5px dashed var(--cinza-light);border-radius:10px;}
+.rateio-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.rateio-row{display:grid;grid-template-columns:1fr 170px auto;gap:10px;align-items:end;margin-bottom:10px;}
+.rt-soma{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:500;color:var(--cinza);margin-top:4px;}
+.rt-soma.ok{color:var(--sucesso);} .rt-soma.bad{color:var(--erro);}
+.rt-rm{background:transparent;border:1.5px solid var(--cinza-light);color:var(--erro);border-radius:8px;padding:10px 12px;font-weight:700;}
 .anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
 .anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
 .anexo-box input[type=file]{display:none;}
@@ -212,6 +237,7 @@ tbody tr:hover{background:var(--creme);}
             <label>Placa do caminhão <span class="req">★</span></label>
             <input id="f_placa" list="placas-list" placeholder="ABC1D23" style="text-transform:uppercase">
             <datalist id="placas-list"></datalist>
+            <label class="switch"><input type="checkbox" id="f_rateio" onchange="toggleRateio()"> Ratear entre caminhões</label>
           </div>
           <div class="field">
             <label>Motorista</label>
@@ -222,6 +248,17 @@ tbody tr:hover{background:var(--creme);}
             <label>Frete (opcional)</label>
             <select id="f_frete"><option value="">— sem vínculo —</option></select>
           </div>
+        </div>
+        <div class="rateio-box" id="rateio-box" style="display:none">
+          <div class="rateio-head">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza)">Rateio do boleto por caminhão — a soma deve fechar com o valor total</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="dividirIgual()">÷ Dividir igual</button>
+              <button class="btn btn-ghost btn-sm" type="button" onclick="addRateioRow('','')">+ Caminhão</button>
+            </div>
+          </div>
+          <div id="rateio-rows"></div>
+          <div class="rt-soma" id="rt-soma">Rateio: R$ 0,00</div>
         </div>
       </div>
 
@@ -246,7 +283,7 @@ tbody tr:hover{background:var(--creme);}
       <div class="section">
         <div class="sec-label">04 — Valor & conta</div>
         <div class="grid four">
-          <div class="field"><label>Valor (R$) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="f_valor" placeholder="0,00"></div>
+          <div class="field"><label>Valor (R$) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="f_valor" placeholder="0,00" oninput="rateioSoma()"></div>
           <div class="field"><label>Parcelas</label><input type="number" min="1" max="36" id="f_parcelas" value="1"></div>
           <div class="field"><label>Conta (ao dar baixa)</label><input id="f_conta" placeholder="Banco/caixa" disabled></div>
           <div class="field">
@@ -311,11 +348,20 @@ tbody tr:hover{background:var(--creme);}
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
     </div>
 
+    <div class="sel-bar" id="sel-bar" style="display:none">
+      <div class="sel-info"><b id="sel-count">0</b> selecionado(s) · soma <b id="sel-soma">R$ 0,00</b></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-ghost" onclick="limparSel()">Limpar seleção</button>
+        <button class="btn btn-sm btn-primary" onclick="baixaSelecionados()">✓ Dar baixa nos selecionados</button>
+      </div>
+    </div>
+
     <div class="tbl-wrap">
       <table>
         <thead><tr>
+          <th class="chk-cell"><input type="checkbox" id="chk-all" onchange="toggleAll(this)" title="Selecionar todos"></th>
           <th>Vencimento</th><th>Fornecedor</th><th>Tipo</th><th>Placa</th>
-          <th style="text-align:right">Valor</th><th>Status</th><th>Conta</th><th></th>
+          <th style="text-align:right">Valor</th><th style="text-align:center">Status</th><th>Conta</th><th></th>
         </tr></thead>
         <tbody id="lista-tbody"></tbody>
       </table>
@@ -396,6 +442,45 @@ function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anex
 function anexoSelecionado(input){ pendingAnexo=_boxSet(input); }
 function boletoSelecionado(input){ pendingBoleto=_boxSet(input); }
 
+/* ===================== RATEIO ===================== */
+function toggleRateio(){
+  const on=$('f_rateio').checked;
+  $('rateio-box').style.display=on?'block':'none';
+  $('f_placa').disabled=on; if(on) $('f_placa').value='';
+  $('f_parcelas').disabled=on; if(on) $('f_parcelas').value=1;
+  if(on && !$('rateio-rows').children.length){ addRateioRow('',''); addRateioRow('',''); }
+  rateioSoma();
+}
+function addRateioRow(placa,valor){
+  const box=$('rateio-rows'); const row=document.createElement('div'); row.className='rateio-row';
+  row.innerHTML=`
+    <div class="field"><label>Placa</label><input class="rt-placa" list="placas-list" value="${placa||''}" placeholder="ABC1D23" style="text-transform:uppercase"></div>
+    <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="rt-valor" value="${valor||''}" placeholder="0,00" oninput="rateioSoma()"></div>
+    <button class="rt-rm" type="button" onclick="this.parentElement.remove();rateioSoma()">×</button>`;
+  box.appendChild(row); rateioSoma();
+}
+function lerRateio(){
+  return [...document.querySelectorAll('#rateio-rows .rateio-row')].map(r=>({
+    placa:(r.querySelector('.rt-placa').value||'').trim().toUpperCase(),
+    valor:parseFloat(r.querySelector('.rt-valor').value)||0
+  })).filter(x=>x.placa && x.valor>0);
+}
+function rateioSoma(){
+  const h=$('rt-soma'); if(!h) return;
+  const total=parseFloat($('f_valor').value)||0;
+  const soma=[...document.querySelectorAll('#rateio-rows .rt-valor')].reduce((s,i)=>s+(parseFloat(i.value)||0),0);
+  h.textContent=`Rateio: ${money(soma)} de ${money(total)}`;
+  h.className='rt-soma'+(total>0?(Math.abs(soma-total)<0.01?' ok':' bad'):'');
+}
+function dividirIgual(){
+  const total=parseFloat($('f_valor').value)||0;
+  const rows=[...document.querySelectorAll('#rateio-rows .rateio-row')];
+  if(!rows.length||total<=0){ toast('Preencha o valor total e adicione caminhões.',true); return; }
+  const n=rows.length, parc=parseFloat((total/n).toFixed(2));
+  rows.forEach((r,i)=>{ r.querySelector('.rt-valor').value = (i===n-1 ? (total-parc*(n-1)) : parc).toFixed(2); });
+  rateioSoma();
+}
+
 /* ===================== STATUS TOGGLE ===================== */
 function setStatus(s){
   statusAtual=s;
@@ -469,12 +554,20 @@ function preencherListas(){
 async function salvar(){
   const tipo=$('f_tipo').value, forn=$('f_fornecedor').value.trim(), placa=$('f_placa').value.trim().toUpperCase();
   const valor=parseFloat($('f_valor').value), venc=$('f_vencimento').value;
+  const rateio = $('f_rateio').checked && !editingId;
   if(!tipo){ toast('Selecione o tipo de despesa.',true); return; }
   if(!forn){ toast('Informe o fornecedor.',true); return; }
-  if(!placa){ toast('Informe a placa do caminhão.',true); return; }
+  if(!rateio && !placa){ toast('Informe a placa do caminhão.',true); return; }
   if(!valor||valor<=0){ toast('Informe um valor válido.',true); return; }
   if(!venc){ toast('Informe o vencimento.',true); return; }
   if(statusAtual==='PAGO' && !$('f_pagamento').value){ toast('Informe a data de pagamento.',true); return; }
+  let rt=[];
+  if(rateio){
+    rt=lerRateio();
+    if(!rt.length){ toast('Adicione ao menos um caminhão no rateio (placa e valor).',true); return; }
+    const soma=rt.reduce((s,x)=>s+x.valor,0);
+    if(Math.abs(soma-valor)>0.01){ toast(`A soma do rateio (${money(soma)}) precisa fechar com o total (${money(valor)}).`,true); return; }
+  }
 
   const base={
     tipo_despesa:tipo, placa, motorista:$('f_motorista').value.trim()||null,
@@ -502,6 +595,12 @@ async function salvar(){
     if(editingId){
       await sb(`despesas?id=eq.${editingId}`,{method:'PATCH',body:JSON.stringify({...base, vencimento:venc, valor})});
       toast('Lançamento atualizado.');
+    } else if(rateio){
+      const cg='RT'+Date.now();
+      for(const x of rt){ await salvarCaminhaoSeNovo(x.placa); }
+      const rows=rt.map(x=>({...base, placa:x.placa, valor:x.valor, vencimento:venc, cg}));
+      await sb('despesas',{method:'POST',body:JSON.stringify(rows)});
+      toast(`Rateio lançado em ${rt.length} caminhão(ões).`);
     } else {
       const n=Math.max(1,Math.min(36,parseInt($('f_parcelas').value)||1));
       const rows=[];
@@ -568,21 +667,57 @@ function renderLista(){
   $('painel-sub').textContent=`${list.length} lançamento(s)`;
   const canDel=hasPerm('excluir');
   const tb=$('lista-tbody');
-  if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; return; }
-  tb.innerHTML=list.map(d=>`<tr>
-    <td class="mono">${fdate(d.vencimento)}</td>
-    <td><b>${esc(d.fornecedor||'—')}</b>${d.documento?`<div class="mono" style="color:var(--cinza);font-size:11px">${esc(d.documento)}</div>`:''}<span style="display:flex;gap:8px">${d.boleto?`<a href="${publicUrl(d.boleto)}" target="_blank" class="mono" style="color:var(--marrom);font-size:11px;text-decoration:none">🏦 boleto</a>`:''}${d.nf?`<a href="${publicUrl(d.nf)}" target="_blank" class="mono" style="color:var(--verde-light);font-size:11px;text-decoration:none">📎 NF</a>`:''}</span></td>
-    <td><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
-    <td class="mono">${esc(d.placa||'—')}</td>
+  if(!list.length){ tb.innerHTML=`<tr><td colspan="9"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; if($('sel-bar'))$('sel-bar').style.display='none'; if($('chk-all')){$('chk-all').checked=false;$('chk-all').indeterminate=false;} return; }
+  tb.innerHTML=list.map(d=>`<tr data-id="${d.id}">
+    <td class="chk-cell"><input type="checkbox" class="row-chk" value="${d.id}" data-valor="${d.valor||0}" data-status="${esc(d.status)}" onchange="onSel()"></td>
+    <td class="nowrap mono">${fdate(d.vencimento)}</td>
+    <td class="forn-cell">
+      <div class="forn-nome">${esc(d.fornecedor||'—')}</div>
+      ${d.documento?`<div class="forn-doc">${esc(d.documento)}</div>`:''}
+      ${(d.boleto||d.nf)?`<div class="anx-row">${d.boleto?`<a class="anx-link" href="${publicUrl(d.boleto)}" target="_blank">🏦 boleto</a>`:''}${d.nf?`<a class="anx-link nf" href="${publicUrl(d.nf)}" target="_blank">📎 NF</a>`:''}</div>`:''}
+    </td>
+    <td class="nowrap"><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
+    <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
     <td class="val">${money(d.valor)}</td>
-    <td><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
-    <td class="mono">${esc(d.conta||'—')}</td>
-    <td><div class="row-actions">
+    <td class="nowrap" style="text-align:center"><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
+    <td class="nowrap mono">${esc(d.conta||'—')}</td>
+    <td class="nowrap"><div class="row-actions">
       ${d.status==='A_PAGAR'?`<button class="btn btn-sm btn-primary" onclick="darBaixa(${d.id})">Baixa</button>`:''}
       <button class="btn btn-sm btn-ghost" onclick="editar(${d.id})">Editar</button>
       ${canDel?`<button class="btn btn-sm btn-danger" onclick="excluir(${d.id})">×</button>`:''}
     </div></td>
   </tr>`).join('');
+  onSel();
+}
+
+/* ===================== SELEÇÃO / BAIXA EM LOTE ===================== */
+function onSel(){
+  const chks=[...document.querySelectorAll('.row-chk:checked')];
+  const soma=chks.reduce((s,c)=>s+(parseFloat(c.dataset.valor)||0),0);
+  if($('sel-count')) $('sel-count').textContent=chks.length;
+  if($('sel-soma')) $('sel-soma').textContent=money(soma);
+  if($('sel-bar')) $('sel-bar').style.display=chks.length?'flex':'none';
+  const all=document.querySelectorAll('.row-chk'), a=$('chk-all');
+  if(a){ a.checked=all.length>0 && chks.length===all.length; a.indeterminate=chks.length>0 && chks.length<all.length; }
+  document.querySelectorAll('#lista-tbody tr').forEach(tr=>{ const c=tr.querySelector('.row-chk'); tr.classList.toggle('sel-row', !!(c&&c.checked)); });
+}
+function toggleAll(cb){ document.querySelectorAll('.row-chk').forEach(c=>c.checked=cb.checked); onSel(); }
+function limparSel(){ document.querySelectorAll('.row-chk').forEach(c=>c.checked=false); onSel(); }
+async function baixaSelecionados(){
+  const ids=[...document.querySelectorAll('.row-chk:checked')].map(c=>Number(c.value));
+  const alvos=ids.map(id=>despesas.find(d=>d.id===id)).filter(d=>d&&d.status==='A_PAGAR');
+  const jaPagos=ids.length-alvos.length;
+  if(!alvos.length){ toast('Nenhum lançamento "a pagar" na seleção.',true); return; }
+  const total=alvos.reduce((s,d)=>s+(+d.valor||0),0);
+  const data=prompt(`Baixar ${alvos.length} lançamento(s) — total ${money(total)}.\nData do pagamento (AAAA-MM-DD):`, new Date().toISOString().slice(0,10)); if(!data) return;
+  const conta=prompt('Conta / banco do pagamento (opcional):','')||null;
+  setSync('sync'); showLoading(true);
+  try{
+    await Promise.all(alvos.map(d=>sb(`despesas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'PAGO',pagamento:data,conta})})));
+    toast(`${alvos.length} baixado(s)${jaPagos?` · ${jaPagos} já estava(m) pago(s)`:''}.`); setSync('online');
+    await carregar();
+  }catch(e){ console.error(e); setSync('err'); toast('Erro na baixa em lote.',true); }
+  finally{ showLoading(false); }
 }
 
 async function darBaixa(id){
@@ -602,6 +737,7 @@ function editar(id){
   $('f_motorista').value=d.motorista||''; $('f_frete').value=d.frete_id||''; $('f_data_doc').value=d.data_doc||'';
   $('f_vencimento').value=d.vencimento||''; $('f_valor').value=d.valor||''; $('f_forma').value=d.forma_pagamento||'PIX';
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
+  $('f_rateio').checked=false; $('f_rateio').disabled=true; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
   pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 NF atual — envie outro para substituir';
@@ -621,6 +757,9 @@ function limparForm(){
   editingId=null;
   ['f_tipo','f_fornecedor','f_cnpj','f_documento','f_pix','f_placa','f_motorista','f_frete','f_data_doc','f_vencimento','f_pagamento','f_valor','f_conta','f_historico'].forEach(id=>$(id).value='');
   $('f_parcelas').value=1; $('f_parcelas').disabled=false; $('f_forma').value='PIX';
+  if($('f_rateio')){ $('f_rateio').checked=false; $('f_rateio').disabled=false; }
+  if($('rateio-rows')) $('rateio-rows').innerHTML=''; if($('rateio-box')) $('rateio-box').style.display='none';
+  if($('f_placa')) $('f_placa').disabled=false; if($('rt-soma')) $('rt-soma').textContent='Rateio: R$ 0,00';
   pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
   pendingBoleto=null; if($('f_boleto')){$('f_boleto').value=''; _boxSet($('f_boleto'));}
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
