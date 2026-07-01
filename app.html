@@ -251,12 +251,14 @@ td.nowrap,th.nowrap{white-space:nowrap;}
         </div>
         <div class="rateio-box" id="rateio-box" style="display:none">
           <div class="rateio-head">
-            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza)">Rateio do boleto por caminhão — a soma deve fechar com o valor total</div>
-            <div style="display:flex;gap:8px">
+            <div class="field" style="max-width:230px"><label>Valor do boleto (total) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="rt-total" placeholder="0,00" oninput="rtTotalChanged()"></div>
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="usarSomaComoTotal()">↑ Usar soma como total</button>
               <button class="btn btn-ghost btn-sm" type="button" onclick="dividirIgual()">÷ Dividir igual</button>
               <button class="btn btn-ghost btn-sm" type="button" onclick="addRateioRow('','')">+ Caminhão</button>
             </div>
           </div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza);margin:6px 0 12px">Rateio do boleto por caminhão — a soma precisa fechar com o valor do boleto</div>
           <div id="rateio-rows"></div>
           <div class="rt-soma" id="rt-soma">Rateio: R$ 0,00</div>
         </div>
@@ -448,8 +450,15 @@ function toggleRateio(){
   $('rateio-box').style.display=on?'block':'none';
   $('f_placa').disabled=on; if(on) $('f_placa').value='';
   $('f_parcelas').disabled=on; if(on) $('f_parcelas').value=1;
-  if(on && !$('rateio-rows').children.length){ addRateioRow('',''); addRateioRow('',''); }
+  $('f_valor').readOnly=on;                       // total passa a ser controlado pelo rateio
+  if(on){ $('rt-total').value=$('f_valor').value||''; if(!$('rateio-rows').children.length){ addRateioRow('',''); addRateioRow('',''); } }
   rateioSoma();
+}
+function rtTotalChanged(){ $('f_valor').value=$('rt-total').value; rateioSoma(); }
+function usarSomaComoTotal(){
+  const soma=[...document.querySelectorAll('#rateio-rows .rt-valor')].reduce((s,i)=>s+(parseFloat(i.value)||0),0);
+  const v = soma? soma.toFixed(2):'';
+  $('rt-total').value=v; $('f_valor').value=v; rateioSoma();
 }
 function addRateioRow(placa,valor){
   const box=$('rateio-rows'); const row=document.createElement('div'); row.className='rateio-row';
@@ -469,13 +478,19 @@ function rateioSoma(){
   const h=$('rt-soma'); if(!h) return;
   const total=parseFloat($('f_valor').value)||0;
   const soma=[...document.querySelectorAll('#rateio-rows .rt-valor')].reduce((s,i)=>s+(parseFloat(i.value)||0),0);
-  h.textContent=`Rateio: ${money(soma)} de ${money(total)}`;
-  h.className='rt-soma'+(total>0?(Math.abs(soma-total)<0.01?' ok':' bad'):'');
+  const dif=+(total-soma).toFixed(2);
+  let txt=`Rateio: ${money(soma)} de ${money(total)}`;
+  if(total>0 && Math.abs(dif)>=0.01) txt += dif>0 ? ` · faltam ${money(dif)}` : ` · sobra ${money(-dif)}`;
+  else if(total>0) txt += ` · fecha ✓`;
+  const ok = total>0 && soma>0 && Math.abs(dif)<0.01;
+  h.textContent=txt; h.className='rt-soma'+(total>0?(ok?' ok':' bad'):'');
+  const btn=$('btnSalvar');
+  if(btn){ if($('f_rateio') && $('f_rateio').checked){ btn.disabled=!ok; btn.title=ok?'':'A soma do rateio precisa fechar com o valor do boleto'; } else { btn.disabled=false; btn.title=''; } }
 }
 function dividirIgual(){
   const total=parseFloat($('f_valor').value)||0;
   const rows=[...document.querySelectorAll('#rateio-rows .rateio-row')];
-  if(!rows.length||total<=0){ toast('Preencha o valor total e adicione caminhões.',true); return; }
+  if(!rows.length||total<=0){ toast('Informe o valor do boleto e adicione caminhões.',true); return; }
   const n=rows.length, parc=parseFloat((total/n).toFixed(2));
   rows.forEach((r,i)=>{ r.querySelector('.rt-valor').value = (i===n-1 ? (total-parc*(n-1)) : parc).toFixed(2); });
   rateioSoma();
@@ -737,7 +752,7 @@ function editar(id){
   $('f_motorista').value=d.motorista||''; $('f_frete').value=d.frete_id||''; $('f_data_doc').value=d.data_doc||'';
   $('f_vencimento').value=d.vencimento||''; $('f_valor').value=d.valor||''; $('f_forma').value=d.forma_pagamento||'PIX';
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
-  $('f_rateio').checked=false; $('f_rateio').disabled=true; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false;
+  $('f_rateio').checked=false; $('f_rateio').disabled=true; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false; $('f_valor').readOnly=false; $('btnSalvar').disabled=false;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
   pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 NF atual — envie outro para substituir';
@@ -760,6 +775,7 @@ function limparForm(){
   if($('f_rateio')){ $('f_rateio').checked=false; $('f_rateio').disabled=false; }
   if($('rateio-rows')) $('rateio-rows').innerHTML=''; if($('rateio-box')) $('rateio-box').style.display='none';
   if($('f_placa')) $('f_placa').disabled=false; if($('rt-soma')) $('rt-soma').textContent='Rateio: R$ 0,00';
+  if($('rt-total')) $('rt-total').value=''; if($('f_valor')) $('f_valor').readOnly=false; if($('btnSalvar')) $('btnSalvar').disabled=false;
   pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
   pendingBoleto=null; if($('f_boleto')){$('f_boleto').value=''; _boxSet($('f_boleto'));}
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
