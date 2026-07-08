@@ -152,16 +152,45 @@ td.nowrap,th.nowrap{white-space:nowrap;}
 .th-sort{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:5px;}
 .th-sort:hover{color:#fff;}
 .caret{font-style:normal;font-size:9px;opacity:.9;width:8px;display:inline-block;}
-.anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
+.anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;background:var(--creme);transition:all .18s;position:relative;overflow:hidden;}
 .anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
-.anexo-box input[type=file]{display:none;}
-.anexo-box .anexo-icon{font-size:30px;line-height:1;}
-.anexo-box .anexo-label{font-size:12px;color:var(--cinza);line-height:1.4;}
-.anexo-box .anexo-label strong{color:var(--texto);}
-.anexo-box .anexo-nome{font-size:12px;font-weight:600;color:var(--verde-light);word-break:break-all;padding:0 8px;}
-.anexo-remove{position:absolute;top:6px;right:9px;font-size:15px;color:var(--erro);background:none;border:none;line-height:1;display:none;}
-.anexo-box.tem-arquivo .anexo-remove{display:block;}
 .anexo-box.tem-arquivo{border-color:var(--verde-light);border-style:solid;background:#fff;}
+.anexo-box input[type=file]{display:none;}
+.anexo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:106px;padding:18px;text-align:center;cursor:pointer;}
+.anexo-empty .anexo-icon{font-size:30px;line-height:1;}
+.anexo-empty .anexo-label{font-size:12px;color:var(--cinza);line-height:1.4;}
+.anexo-empty .anexo-label strong{color:var(--texto);}
+.anexo-filled{padding:10px 12px;}
+.anexo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid var(--creme-dark);}
+.anexo-item:last-of-type{border-bottom:none;}
+.ai-nome{font-size:13px;color:var(--marrom-dark);font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ai-acts{display:flex;gap:6px;flex-shrink:0;}
+.ai-ver{background:#e7eede;color:var(--verde-mid);border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;}
+.ai-rm{background:#fbeaea;color:var(--erro);border:none;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;cursor:pointer;}
+.anexo-add{color:var(--verde-light);font-weight:700;font-size:12px;cursor:pointer;padding:9px 2px 2px;text-align:center;}
+.anexo-add:hover{text-decoration:underline;}
+/* selos de docs no painel */
+.docs-cell{display:flex;gap:5px;align-items:center;}
+.doc-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 6px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;color:#fff;}
+.doc-badge.b{background:var(--verde-mid);} .doc-badge.nf{background:#c8781e;}
+.doc-badge:hover{filter:brightness(1.12);}
+.doc-empty{color:var(--cinza);}
+/* visualizador (preview) */
+.viewer{position:fixed;inset:0;background:rgba(20,25,18,.88);z-index:600;display:none;flex-direction:column;}
+.viewer.show{display:flex;}
+.viewer-bar{display:flex;align-items:center;gap:14px;padding:12px 18px;color:#fff;}
+.viewer-bar .vtitle{flex:1;font-weight:600;font-size:14px;font-family:'DM Mono',monospace;}
+.viewer-bar a,.viewer-bar button{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 14px;font-size:13px;text-decoration:none;cursor:pointer;}
+.viewer-bar a:hover,.viewer-bar button:hover{background:rgba(255,255,255,.26);}
+.viewer-body{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;overflow:auto;}
+.viewer-body iframe{background:#fff;width:min(940px,100%);height:100%;border:none;border-radius:8px;}
+.viewer-body img{background:#fff;max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
+/* modal de detalhes */
+.det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 22px;}
+.det-f .k{font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);margin-bottom:3px;}
+.det-f .v{font-size:14px;font-weight:600;color:var(--texto);}
+.det-anexos{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+@media(max-width:640px){.det-grid{grid-template-columns:1fr 1fr;}}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--verde);color:#fff;padding:13px 18px;border-radius:11px;box-shadow:var(--shadow-lg);font-size:14px;font-weight:600;z-index:300;opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;max-width:340px;}
 .toast.show{opacity:1;transform:none;}
 .toast.err{background:var(--erro);}
@@ -324,20 +353,24 @@ td.nowrap,th.nowrap{white-space:nowrap;}
         <div class="sec-label">06 — Anexos · boletos & notas fiscais</div>
         <div class="grid two">
           <div class="field"><label>Boletos (pode anexar vários)</label>
-            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+            <div class="anexo-box" id="box-boleto" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
               <input type="file" id="f_boleto" accept="image/*,application/pdf" multiple onchange="boletoSelecionado(this)">
-              <span class="anexo-icon">🏦</span>
-              <span class="anexo-label">Clique ou arraste<br><strong>Boletos</strong> — PDF ou Imagem</span>
+              <div class="anexo-empty" onclick="$('f_boleto').click()">
+                <span class="anexo-icon">🏦</span>
+                <span class="anexo-label">Clique ou arraste<br><strong>Boletos</strong> — PDF ou Imagem · até 5</span>
+              </div>
+              <div class="anexo-filled" style="display:none"></div>
             </div>
-            <div class="anx-chips" id="boleto-chips"></div>
           </div>
           <div class="field"><label>Notas fiscais / recibos (pode anexar vários)</label>
-            <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
+            <div class="anexo-box" id="box-nf" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
               <input type="file" id="f_anexo" accept="image/*,application/pdf" multiple onchange="anexoSelecionado(this)">
-              <span class="anexo-icon">🧾</span>
-              <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Contrato</strong></span>
+              <div class="anexo-empty" onclick="$('f_anexo').click()">
+                <span class="anexo-icon">🧾</span>
+                <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Contrato</strong> · até 5</span>
+              </div>
+              <div class="anexo-filled" style="display:none"></div>
             </div>
-            <div class="anx-chips" id="nf-chips"></div>
           </div>
         </div>
       </div>
@@ -386,10 +419,42 @@ td.nowrap,th.nowrap{white-space:nowrap;}
           <th><span class="th-sort" onclick="sortBy('placa')">Placa <i class="caret" id="cr-placa"></i></span></th>
           <th style="text-align:right"><span class="th-sort" onclick="sortBy('valor')">Valor <i class="caret" id="cr-valor"></i></span></th>
           <th style="text-align:center"><span class="th-sort" onclick="sortBy('status')">Status <i class="caret" id="cr-status"></i></span></th>
-          <th>Conta</th><th></th>
+          <th>Docs</th><th>Conta</th><th></th>
         </tr></thead>
         <tbody id="lista-tbody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="viewer" id="viewer">
+  <div class="viewer-bar">
+    <span class="vtitle" id="viewer-title">Anexo</span>
+    <a id="viewer-download" href="#" download>⤓ Baixar</a>
+    <button onclick="fecharViewer()">✕ Fechar</button>
+  </div>
+  <div class="viewer-body" id="viewer-body"></div>
+</div>
+
+<div id="detOverlay" style="display:none;position:fixed;inset:0;background:rgba(39,64,31,.5);backdrop-filter:blur(3px);z-index:400;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;">
+  <div style="background:#fff;border-radius:16px;max-width:720px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--creme-dark);display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div><div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;color:var(--verde)" id="det-forn">—</div>
+        <div class="mono" style="color:var(--cinza);font-size:12px" id="det-id"></div></div>
+      <button class="btn btn-ghost btn-sm" onclick="fecharDetalhe()">✕</button>
+    </div>
+    <div style="padding:22px">
+      <div class="det-grid" id="det-grid"></div>
+      <div style="border-top:1px solid var(--creme-dark);margin-top:20px;padding-top:16px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza);margin-bottom:8px">Anexos</div>
+        <div class="det-anexos" id="det-anexos"></div>
+      </div>
+    </div>
+    <div style="padding:16px 22px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme);flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="fecharDetalhe()">Fechar</button>
+      <button class="btn btn-danger" id="det-excluir" onclick="detExcluir()">🗑 Excluir</button>
+      <button class="btn btn-ghost" onclick="detEditar()">✎ Editar</button>
+      <button class="btn btn-primary" id="det-baixar" onclick="detBaixar()">✓ Baixar</button>
     </div>
   </div>
 </div>
@@ -484,24 +549,52 @@ async function uploadAnexo(file,pasta){
   return path;
 }
 function anexoArr(v){ if(!v) return []; if(typeof v==='string' && v.trim().startsWith('[')){ try{return JSON.parse(v);}catch(e){return [v];} } return [v]; }
-function anexoNome(path){ const s=String(path).split('/').pop(); return s.length>22? s.slice(0,20)+'…':s; }
+function anexoNome(path){ const s=String(path).split('/').pop(); return s.length>26? s.slice(0,24)+'…':s; }
+function isImgUrl(u){ return /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(u); }
 function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const fs=ev.dataTransfer&&ev.dataTransfer.files; if(!fs||!fs.length)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer(); for(const f of fs) dt.items.add(f); input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
-function boletoSelecionado(input){ for(const f of input.files) pendingBoletos.push(f); input.value=''; renderChips('boleto'); }
-function anexoSelecionado(input){ for(const f of input.files) pendingNfs.push(f); input.value=''; renderChips('nf'); }
+function boletoSelecionado(input){ addFiles('boleto', input.files); input.value=''; }
+function anexoSelecionado(input){ addFiles('nf', input.files); input.value=''; }
+function addFiles(kind, fileList){
+  const pend=kind==='boleto'?pendingBoletos:pendingNfs, keep=kind==='boleto'?keepBoletos:keepNfs;
+  let room=5-(pend.length+keep.length);
+  for(const f of fileList){ if(room<=0){ toast('Máximo de 5 arquivos por caixa.',true); break; } pend.push(f); room--; }
+  renderChips(kind);
+}
 function removeAnexo(kind,which,i){
   const arr = which==='keep' ? (kind==='boleto'?keepBoletos:keepNfs) : (kind==='boleto'?pendingBoletos:pendingNfs);
   arr.splice(i,1); renderChips(kind);
 }
+function chipItem(kind,which,i,nome){
+  return `<div class="anexo-item"><span class="ai-nome">📎 ${esc(nome.length>26?nome.slice(0,24)+'…':nome)}</span>
+    <span class="ai-acts"><button type="button" class="ai-ver" onclick="verPending('${kind}','${which}',${i})">👁 ver</button>
+    <button type="button" class="ai-rm" onclick="removeAnexo('${kind}','${which}',${i})">✕</button></span></div>`;
+}
 function renderChips(kind){
   const pend=kind==='boleto'?pendingBoletos:pendingNfs, keep=kind==='boleto'?keepBoletos:keepNfs;
-  const box=$(kind==='boleto'?'boleto-chips':'nf-chips'); if(!box) return;
-  const p=[];
-  keep.forEach((path,i)=>p.push(`<span class="anx-chip"><a href="${publicUrl(path)}" target="_blank">📎 ${esc(anexoNome(path))}</a><button type="button" onclick="removeAnexo('${kind}','keep',${i})">✕</button></span>`));
-  pend.forEach((f,i)=>p.push(`<span class="anx-chip new">📎 ${esc(f.name.length>22?f.name.slice(0,20)+'…':f.name)}<button type="button" onclick="removeAnexo('${kind}','pend',${i})">✕</button></span>`));
-  box.innerHTML=p.join('');
-  const inputEl=$(kind==='boleto'?'f_boleto':'f_anexo'); const boxEl=inputEl.closest('.anexo-box');
-  if(boxEl) boxEl.classList.toggle('tem-arquivo', keep.length+pend.length>0);
+  const box=$(kind==='boleto'?'box-boleto':'box-nf'); if(!box) return;
+  const empty=box.querySelector('.anexo-empty'), filled=box.querySelector('.anexo-filled');
+  const items=[];
+  keep.forEach((path,i)=>items.push(chipItem(kind,'keep',i,anexoNome(path))));
+  pend.forEach((f,i)=>items.push(chipItem(kind,'pend',i,f.name)));
+  const has=items.length>0;
+  box.classList.toggle('tem-arquivo',has);
+  empty.style.display=has?'none':'';
+  filled.style.display=has?'block':'none';
+  const inputId=kind==='boleto'?'f_boleto':'f_anexo';
+  filled.innerHTML=items.join('')+ (items.length<5?`<div class="anexo-add" onclick="$('${inputId}').click()">+ adicionar outro</div>`:'');
 }
+function verPending(kind,which,i){
+  if(which==='keep'){ const path=(kind==='boleto'?keepBoletos:keepNfs)[i]; verAnexo(publicUrl(path),anexoNome(path),isImgUrl(path)); }
+  else { const f=(kind==='boleto'?pendingBoletos:pendingNfs)[i]; verAnexo(URL.createObjectURL(f),f.name,/^image\//.test(f.type)); }
+}
+function verAnexoPath(path,nome){ verAnexo(publicUrl(path),nome,isImgUrl(path)); }
+function verAnexo(url,nome,isImg){
+  $('viewer-title').textContent=nome||'Anexo';
+  $('viewer-download').href=url;
+  $('viewer-body').innerHTML = isImg ? `<img src="${url}" alt="">` : `<iframe src="${url}"></iframe>`;
+  $('viewer').classList.add('show');
+}
+function fecharViewer(){ $('viewer').classList.remove('show'); $('viewer-body').innerHTML=''; }
 
 /* ===================== RATEIO ===================== */
 function toggleRateio(){
@@ -803,26 +896,28 @@ function renderLista(){
   $('painel-sub').textContent=`${list.length} lançamento(s)`;
   const canDel=hasPerm('excluir');
   const tb=$('lista-tbody');
-  if(!list.length){ tb.innerHTML=`<tr><td colspan="9"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; if($('sel-bar'))$('sel-bar').style.display='none'; if($('chk-all')){$('chk-all').checked=false;$('chk-all').indeterminate=false;} return; }
-  tb.innerHTML=list.map(d=>`<tr data-id="${d.id}">
+  if(!list.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; if($('sel-bar'))$('sel-bar').style.display='none'; if($('chk-all')){$('chk-all').checked=false;$('chk-all').indeterminate=false;} return; }
+  tb.innerHTML=list.map(d=>{
+    const nb=anexoArr(d.boleto).length, nn=anexoArr(d.nf).length;
+    return `<tr data-id="${d.id}" onclick="rowClick(event,${d.id})" style="cursor:pointer">
     <td class="chk-cell"><input type="checkbox" class="row-chk" value="${d.id}" data-valor="${d.valor||0}" data-status="${esc(d.status)}" onchange="onSel()"></td>
     <td class="nowrap mono">${fdate(d.vencimento)}</td>
     <td class="forn-cell">
       <div class="forn-nome">${esc(d.fornecedor||'—')}</div>
       ${d.documento?`<div class="forn-doc">${esc(d.documento)}</div>`:''}
-      ${(anexoArr(d.boleto).length||anexoArr(d.nf).length)?`<div class="anx-row">${anexoArr(d.boleto).map((p,i,a)=>`<a class="anx-link" href="${publicUrl(p)}" target="_blank">🏦 boleto${a.length>1?' '+(i+1):''}</a>`).join('')}${anexoArr(d.nf).map((p,i,a)=>`<a class="anx-link nf" href="${publicUrl(p)}" target="_blank">📎 NF${a.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}
     </td>
     <td class="nowrap"><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
     <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
     <td class="val">${money(d.valor)}${(+d.juros>0)?`<div style="font-size:10px;color:var(--amber);font-weight:600">+ juros ${money(d.juros)}</div>`:''}</td>
     <td class="nowrap" style="text-align:center"><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
+    <td class="nowrap"><div class="docs-cell">${nb?`<span class="doc-badge b" onclick="openDetalhe(${d.id})">B${nb>1?nb:''}</span>`:''}${nn?`<span class="doc-badge nf" onclick="openDetalhe(${d.id})">NF${nn>1?nn:''}</span>`:''}${(!nb&&!nn)?'<span class="doc-empty">—</span>':''}</div></td>
     <td class="nowrap mono">${esc(d.conta||'—')}</td>
     <td class="nowrap"><div class="row-actions">
       ${d.status==='A_PAGAR'?`<button class="btn btn-sm btn-primary" onclick="darBaixa(${d.id})">Baixa</button>`:''}
       <button class="btn btn-sm btn-ghost" onclick="editar(${d.id})">Editar</button>
       ${canDel?`<button class="btn btn-sm btn-danger" onclick="excluir(${d.id})">×</button>`:''}
     </div></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
   onSel();
 }
 
@@ -897,6 +992,42 @@ function exportarCSV(){
   a.href=url; a.download=`despesas_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   toast(`${list.length} lançamento(s) exportado(s).`);
 }
+
+let detalheId=null;
+function rowClick(ev,id){ if(ev.target.closest('button,input,a,.doc-badge')) return; openDetalhe(id); }
+function openDetalhe(id){
+  const d=despesas.find(x=>x.id===id); if(!d) return; detalheId=id;
+  $('det-forn').textContent=d.fornecedor||'—'; $('det-id').textContent='ID '+d.id;
+  const F=(k,v)=>`<div class="det-f"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  $('det-grid').innerHTML=[
+    F('Nº documento', esc(d.documento||'—')),
+    F('Lançador', esc(d.lancador||'—')),
+    F('Categoria', esc(d.tipo_despesa||'—')),
+    F('Data documento', fdate(d.data_doc)),
+    F('Vencimento', fdate(d.vencimento)),
+    F('Pagamento', fdate(d.pagamento)),
+    F('Status', d.status==='PAGO'?'<span class="badge pago">PAGO</span>':'<span class="badge apagar">A PAGAR</span>'),
+    F('Valor', money(d.valor)+(+d.juros>0?` <span style="color:var(--amber);font-size:12px">+ juros ${money(d.juros)}</span>`:'')),
+    F('Conta', esc(d.conta||'—')),
+    F('Placa', esc(d.placa||'—')),
+    F('Motorista', esc(d.motorista||'—')),
+    F('Forma', esc(d.forma_pagamento||'—')),
+    F('Observação', esc(d.historico||'—')),
+  ].join('');
+  const bol=anexoArr(d.boleto), nf=anexoArr(d.nf);
+  const btns=[
+    ...bol.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','Boleto ${i+1}')">🏦 Ver Boleto ${bol.length>1?i+1:''}</button>`),
+    ...nf.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','NF ${i+1}')">📎 Ver NF ${nf.length>1?i+1:''}</button>`)
+  ];
+  $('det-anexos').innerHTML = btns.length? btns.join('') : '<span style="color:var(--cinza);font-size:13px">Sem anexos.</span>';
+  $('det-baixar').style.display = d.status==='A_PAGAR'?'':'none';
+  $('det-excluir').style.display = hasPerm('excluir')?'':'none';
+  $('detOverlay').style.display='flex';
+}
+function fecharDetalhe(){ $('detOverlay').style.display='none'; detalheId=null; }
+function detEditar(){ const id=detalheId; fecharDetalhe(); editar(id); }
+function detBaixar(){ const id=detalheId; fecharDetalhe(); darBaixa(id); }
+function detExcluir(){ const id=detalheId; fecharDetalhe(); excluir(id); }
 
 function editar(id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
