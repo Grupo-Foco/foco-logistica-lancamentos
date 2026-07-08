@@ -140,6 +140,18 @@ td.nowrap,th.nowrap{white-space:nowrap;}
 .rt-soma{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:500;color:var(--cinza);margin-top:4px;}
 .rt-soma.ok{color:var(--sucesso);} .rt-soma.bad{color:var(--erro);}
 .rt-rm{background:transparent;border:1.5px solid var(--cinza-light);color:var(--erro);border-radius:8px;padding:10px 12px;font-weight:700;}
+.parc-ed-head{display:grid;grid-template-columns:56px 1fr 190px;gap:12px;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--verde-mid);padding:9px 12px;border-radius:8px 8px 0 0;}
+.parc-ed-row{display:grid;grid-template-columns:56px 1fr 190px;gap:12px;align-items:center;padding:9px 12px;border:1px solid var(--creme-dark);border-top:none;background:var(--branco);}
+.parc-ed-row:last-child{border-radius:0 0 8px 8px;}
+.parc-ed-row .pnum{font-family:'DM Mono',monospace;font-size:12px;color:var(--marrom-dark);font-weight:600;}
+.anx-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
+.anx-chip{display:inline-flex;align-items:center;gap:6px;background:var(--creme-dark);border-radius:7px;padding:4px 9px;font-size:12px;font-family:'DM Mono',monospace;color:var(--marrom-dark);}
+.anx-chip.new{background:#e7eede;color:var(--verde-mid);}
+.anx-chip a{color:inherit;text-decoration:none;} .anx-chip a:hover{text-decoration:underline;}
+.anx-chip button{background:none;border:none;color:var(--erro);font-weight:700;cursor:pointer;font-size:13px;line-height:1;}
+.th-sort{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:5px;}
+.th-sort:hover{color:#fff;}
+.caret{font-style:normal;font-size:9px;opacity:.9;width:8px;display:inline-block;}
 .anexo-box{border:2px dashed var(--cinza-light);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--creme);display:flex;flex-direction:column;align-items:center;gap:7px;min-height:98px;justify-content:center;position:relative;}
 .anexo-box:hover,.anexo-box.drag-over{border-color:var(--verde-light);background:#eaf0e3;}
 .anexo-box input[type=file]{display:none;}
@@ -203,9 +215,9 @@ td.nowrap,th.nowrap{white-space:nowrap;}
             <select id="f_tipo">
               <option value="">Selecionar…</option>
               <option>COMBUSTÍVEL</option><option>PEDÁGIO</option><option>MANUTENÇÃO</option>
-              <option>BORRACHARIA</option><option>PNEU</option><option>ALIMENTAÇÃO</option>
-              <option>HOSPEDAGEM</option><option>LAVAGEM</option><option>DOCUMENTAÇÃO</option>
-              <option>SALÁRIO</option><option>REEMBOLSO</option><option>OUTROS</option>
+              <option>PEÇAS</option><option>BORRACHARIA</option><option>PNEU</option>
+              <option>ALIMENTAÇÃO</option><option>HOSPEDAGEM</option><option>LAVAGEM</option>
+              <option>DOCUMENTAÇÃO</option><option>SALÁRIO</option><option>REEMBOLSO</option><option>OUTROS</option>
             </select>
           </div>
           <div class="field span2">
@@ -269,7 +281,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
         <div class="sec-label">03 — Datas & status</div>
         <div class="grid four">
           <div class="field"><label>Data documento</label><input type="date" id="f_data_doc"></div>
-          <div class="field"><label>Vencimento <span class="req">★</span></label><input type="date" id="f_vencimento"></div>
+          <div class="field"><label>Vencimento <span class="req">★</span></label><input type="date" id="f_vencimento" onchange="onVencChange()"></div>
           <div class="field"><label>Data pagamento</label><input type="date" id="f_pagamento" disabled></div>
           <div class="field">
             <label>Status <span class="req">★</span></label>
@@ -285,13 +297,19 @@ td.nowrap,th.nowrap{white-space:nowrap;}
       <div class="section">
         <div class="sec-label">04 — Valor & conta</div>
         <div class="grid four">
-          <div class="field"><label>Valor (R$) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="f_valor" placeholder="0,00" oninput="rateioSoma()"></div>
-          <div class="field"><label>Parcelas</label><input type="number" min="1" max="36" id="f_parcelas" value="1"></div>
+          <div class="field"><label>Valor (R$) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="f_valor" placeholder="0,00" oninput="onValorChange()"></div>
+          <div class="field"><label>Parcelas</label><input type="number" min="1" max="36" id="f_parcelas" value="1" oninput="onParcelasChange()"></div>
           <div class="field"><label>Conta (ao dar baixa)</label><input id="f_conta" placeholder="Banco/caixa" disabled></div>
           <div class="field">
             <label>Forma de pagamento</label>
             <select id="f_forma"><option>PIX</option><option>BOLETO</option><option>TRANSFERÊNCIA</option><option>DINHEIRO</option><option>CARTÃO</option></select>
           </div>
+        </div>
+        <div id="parcelas-editor" style="display:none;margin-top:18px">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza);margin-bottom:10px">🗓 Parcelas — edite vencimentos e valores</div>
+          <div class="parc-ed-head"><span>#</span><span>Vencimento</span><span>Valor (R$)</span></div>
+          <div id="parcelas-rows"></div>
+          <div class="rt-soma" id="parc-soma" style="margin-top:6px"></div>
         </div>
       </div>
 
@@ -302,25 +320,23 @@ td.nowrap,th.nowrap{white-space:nowrap;}
       </div>
       <!-- 06 -->
       <div class="section">
-        <div class="sec-label">06 — Anexos · boleto & nota fiscal</div>
+        <div class="sec-label">06 — Anexos · boletos & notas fiscais</div>
         <div class="grid two">
-          <div class="field"><label>Boleto</label>
+          <div class="field"><label>Boletos (pode anexar vários)</label>
             <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
-              <input type="file" id="f_boleto" accept="image/*,application/pdf" onchange="boletoSelecionado(this)">
-              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <input type="file" id="f_boleto" accept="image/*,application/pdf" multiple onchange="boletoSelecionado(this)">
               <span class="anexo-icon">🏦</span>
-              <span class="anexo-label">Clique ou arraste<br><strong>Boleto</strong> — PDF ou Imagem</span>
-              <span class="anexo-nome" id="boleto-info"></span>
+              <span class="anexo-label">Clique ou arraste<br><strong>Boletos</strong> — PDF ou Imagem</span>
             </div>
+            <div class="anx-chips" id="boleto-chips"></div>
           </div>
-          <div class="field"><label>Nota fiscal / recibo</label>
+          <div class="field"><label>Notas fiscais / recibos (pode anexar vários)</label>
             <div class="anexo-box" onclick="this.querySelector('input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
-              <input type="file" id="f_anexo" accept="image/*,application/pdf" onchange="anexoSelecionado(this)">
-              <button type="button" class="anexo-remove" onclick="anexoRemove(this,event)">✕</button>
+              <input type="file" id="f_anexo" accept="image/*,application/pdf" multiple onchange="anexoSelecionado(this)">
               <span class="anexo-icon">🧾</span>
               <span class="anexo-label">Clique ou arraste<br><strong>NF / Recibo / Contrato</strong></span>
-              <span class="anexo-nome" id="anexo-info"></span>
             </div>
+            <div class="anx-chips" id="nf-chips"></div>
           </div>
         </div>
       </div>
@@ -362,8 +378,13 @@ td.nowrap,th.nowrap{white-space:nowrap;}
       <table>
         <thead><tr>
           <th class="chk-cell"><input type="checkbox" id="chk-all" onchange="toggleAll(this)" title="Selecionar todos"></th>
-          <th>Vencimento</th><th>Fornecedor</th><th>Tipo</th><th>Placa</th>
-          <th style="text-align:right">Valor</th><th style="text-align:center">Status</th><th>Conta</th><th></th>
+          <th><span class="th-sort" onclick="sortBy('vencimento')">Vencimento <i class="caret" id="cr-vencimento"></i></span></th>
+          <th><span class="th-sort" onclick="sortBy('fornecedor')">Fornecedor <i class="caret" id="cr-fornecedor"></i></span></th>
+          <th><span class="th-sort" onclick="sortBy('tipo')">Tipo <i class="caret" id="cr-tipo"></i></span></th>
+          <th><span class="th-sort" onclick="sortBy('placa')">Placa <i class="caret" id="cr-placa"></i></span></th>
+          <th style="text-align:right"><span class="th-sort" onclick="sortBy('valor')">Valor <i class="caret" id="cr-valor"></i></span></th>
+          <th style="text-align:center"><span class="th-sort" onclick="sortBy('status')">Status <i class="caret" id="cr-status"></i></span></th>
+          <th>Conta</th><th></th>
         </tr></thead>
         <tbody id="lista-tbody"></tbody>
       </table>
@@ -426,7 +447,9 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let despesas=[], caminhoesBD=[], fornecedoresBD=[], motoristasBD=[], fretesBD=[];
-let editingId=null, statusAtual='A_PAGAR', pendingAnexo=null, pendingBoleto=null;
+let editingId=null, statusAtual='A_PAGAR';
+let pendingBoletos=[], pendingNfs=[], keepBoletos=[], keepNfs=[];
+let sortState={col:'vencimento',dir:'desc'};
 
 function publicUrl(p){ return p?`${SB_URL}/storage/v1/object/public/comprovantes/${p}`:null; }
 async function uploadAnexo(file,pasta){
@@ -437,12 +460,25 @@ async function uploadAnexo(file,pasta){
   if(!r.ok) throw new Error('Falha no upload: '+await r.text());
   return path;
 }
-function _box(input){ return input.closest('.anexo-box'); }
-function _boxSet(input){ const f=input.files[0]||null; const b=_box(input); if(b){ b.classList.toggle('tem-arquivo',!!f); const n=b.querySelector('.anexo-nome'); if(n)n.textContent=f?('📎 '+f.name):''; } return f; }
-function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
-function anexoRemove(btn,ev){ ev.stopPropagation(); const inp=btn.closest('.anexo-box').querySelector('input[type=file]'); inp.value=''; inp.dispatchEvent(new Event('change',{bubbles:true})); }
-function anexoSelecionado(input){ pendingAnexo=_boxSet(input); }
-function boletoSelecionado(input){ pendingBoleto=_boxSet(input); }
+function anexoArr(v){ if(!v) return []; if(typeof v==='string' && v.trim().startsWith('[')){ try{return JSON.parse(v);}catch(e){return [v];} } return [v]; }
+function anexoNome(path){ const s=String(path).split('/').pop(); return s.length>22? s.slice(0,20)+'…':s; }
+function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const fs=ev.dataTransfer&&ev.dataTransfer.files; if(!fs||!fs.length)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer(); for(const f of fs) dt.items.add(f); input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
+function boletoSelecionado(input){ for(const f of input.files) pendingBoletos.push(f); input.value=''; renderChips('boleto'); }
+function anexoSelecionado(input){ for(const f of input.files) pendingNfs.push(f); input.value=''; renderChips('nf'); }
+function removeAnexo(kind,which,i){
+  const arr = which==='keep' ? (kind==='boleto'?keepBoletos:keepNfs) : (kind==='boleto'?pendingBoletos:pendingNfs);
+  arr.splice(i,1); renderChips(kind);
+}
+function renderChips(kind){
+  const pend=kind==='boleto'?pendingBoletos:pendingNfs, keep=kind==='boleto'?keepBoletos:keepNfs;
+  const box=$(kind==='boleto'?'boleto-chips':'nf-chips'); if(!box) return;
+  const p=[];
+  keep.forEach((path,i)=>p.push(`<span class="anx-chip"><a href="${publicUrl(path)}" target="_blank">📎 ${esc(anexoNome(path))}</a><button type="button" onclick="removeAnexo('${kind}','keep',${i})">✕</button></span>`));
+  pend.forEach((f,i)=>p.push(`<span class="anx-chip new">📎 ${esc(f.name.length>22?f.name.slice(0,20)+'…':f.name)}<button type="button" onclick="removeAnexo('${kind}','pend',${i})">✕</button></span>`));
+  box.innerHTML=p.join('');
+  const inputEl=$(kind==='boleto'?'f_boleto':'f_anexo'); const boxEl=inputEl.closest('.anexo-box');
+  if(boxEl) boxEl.classList.toggle('tem-arquivo', keep.length+pend.length>0);
+}
 
 /* ===================== RATEIO ===================== */
 function toggleRateio(){
@@ -565,6 +601,73 @@ function preencherListas(){
   $('flt-tipo').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option>${esc(t)}</option>`).join('');
 }
 
+/* ===================== PARCELAS (editor) ===================== */
+function addMonthsISO(baseISO,i){ const d=new Date(baseISO+'T00:00'); d.setMonth(d.getMonth()+i); return d.toISOString().slice(0,10); }
+function onParcelasChange(){ gerarParcelas(); }
+function onVencChange(){ if((parseInt($('f_parcelas').value)||1)>1) gerarParcelas(); }
+function onValorChange(){ rateioSoma(); if((parseInt($('f_parcelas').value)||1)>1) resplitParcelas(); }
+function gerarParcelas(){
+  const n=Math.max(1,Math.min(36,parseInt($('f_parcelas').value)||1));
+  const ed=$('parcelas-editor'), box=$('parcelas-rows'); if(!ed) return;
+  if(n<=1){ ed.style.display='none'; box.innerHTML=''; parcSoma(); return; }
+  ed.style.display='block';
+  const total=parseFloat($('f_valor').value)||0, venc=$('f_vencimento').value||new Date().toISOString().slice(0,10);
+  const parc=+(total/n).toFixed(2);
+  box.innerHTML='';
+  for(let i=0;i<n;i++){
+    const v = i===n-1 ? +(total-parc*(n-1)).toFixed(2) : parc;
+    const row=document.createElement('div'); row.className='parc-ed-row';
+    row.innerHTML=`<span class="pnum">${i+1}/${n}</span>
+      <input type="date" class="pe-venc" value="${addMonthsISO(venc,i)}">
+      <input type="number" step="0.01" min="0" class="pe-valor" value="${total>0?v.toFixed(2):''}" placeholder="0,00" oninput="parcSoma()">`;
+    box.appendChild(row);
+  }
+  parcSoma();
+}
+function resplitParcelas(){
+  const rows=[...document.querySelectorAll('#parcelas-rows .parc-ed-row')]; const n=rows.length; if(!n) return;
+  const total=parseFloat($('f_valor').value)||0, parc=+(total/n).toFixed(2);
+  rows.forEach((r,i)=>{ r.querySelector('.pe-valor').value = total>0 ? (i===n-1?(total-parc*(n-1)):parc).toFixed(2) : ''; });
+  parcSoma();
+}
+function lerParcelasEditor(){
+  return [...document.querySelectorAll('#parcelas-rows .parc-ed-row')].map(r=>({
+    vencimento:r.querySelector('.pe-venc').value||null,
+    valor:parseFloat(r.querySelector('.pe-valor').value)||0
+  }));
+}
+function parcSoma(){
+  const h=$('parc-soma'); if(!h) return;
+  const total=parseFloat($('f_valor').value)||0;
+  const soma=[...document.querySelectorAll('#parcelas-rows .pe-valor')].reduce((s,i)=>s+(parseFloat(i.value)||0),0);
+  const dif=+(total-soma).toFixed(2);
+  let txt=`Soma das parcelas: ${money(soma)} de ${money(total)}`;
+  if(total>0 && Math.abs(dif)>=0.01) txt += dif>0?` · faltam ${money(dif)}`:` · sobra ${money(-dif)}`;
+  h.textContent=txt; h.className='rt-soma'+(total>0?(Math.abs(dif)<0.01?' ok':' bad'):'');
+}
+
+/* ===================== ORDENAÇÃO ===================== */
+function sortBy(col){
+  if(sortState.col===col) sortState.dir = sortState.dir==='asc'?'desc':'asc';
+  else { sortState.col=col; sortState.dir = (col==='vencimento'||col==='valor')?'desc':'asc'; }
+  renderLista();
+}
+function applySort(list){
+  const {col,dir}=sortState, s=dir==='asc'?1:-1;
+  const val=d=>{ switch(col){
+    case 'valor': return +d.valor||0;
+    case 'vencimento': return d.vencimento||'';
+    case 'status': return d.status||'';
+    case 'tipo': return d.tipo_despesa||'';
+    case 'placa': return d.placa||'';
+    case 'fornecedor': return (d.fornecedor||'').toUpperCase();
+    default: return ''; } };
+  return [...list].sort((a,b)=>{ const va=val(a),vb=val(b); if(va<vb)return -s; if(va>vb)return s; return 0; });
+}
+function updateSortArrows(){
+  ['vencimento','fornecedor','tipo','placa','valor','status'].forEach(c=>{ const el=$('cr-'+c); if(el) el.textContent = sortState.col===c ? (sortState.dir==='asc'?'▲':'▼') : ''; });
+}
+
 /* ===================== SALVAR ===================== */
 async function salvar(){
   const tipo=$('f_tipo').value, forn=$('f_fornecedor').value.trim(), placa=$('f_placa').value.trim().toUpperCase();
@@ -598,11 +701,10 @@ async function salvar(){
 
   const btn=$('btnSalvar'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync');
   try{
-    const orig = editingId ? (despesas.find(x=>x.id===editingId)||{}) : {};
-    let nfPath = orig.nf||null, boletoPath = orig.boleto||null;
-    if(pendingAnexo)  nfPath     = await uploadAnexo(pendingAnexo,'despesas-nf');
-    if(pendingBoleto) boletoPath = await uploadAnexo(pendingBoleto,'despesas-boleto');
-    base.nf = nfPath; base.boleto = boletoPath;
+    const boletoPaths=[...keepBoletos]; for(const f of pendingBoletos) boletoPaths.push(await uploadAnexo(f,'despesas-boleto'));
+    const nfPaths=[...keepNfs]; for(const f of pendingNfs) nfPaths.push(await uploadAnexo(f,'despesas-nf'));
+    base.boleto = boletoPaths.length? JSON.stringify(boletoPaths):null;
+    base.nf     = nfPaths.length? JSON.stringify(nfPaths):null;
     await salvarFornecedorSeNovo(forn.toUpperCase(), $('f_cnpj').value.trim());
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(base.motorista);
@@ -622,14 +724,9 @@ async function salvar(){
       if(n===1){ rows.push({...base, vencimento:venc, valor}); }
       else {
         const cg='CG'+Date.now();
-        const parc=parseFloat((valor/n).toFixed(2));
-        const base0=new Date(venc+'T00:00');
-        for(let i=0;i<n;i++){
-          const dt=new Date(base0); dt.setMonth(dt.getMonth()+i);
-          const v = i===n-1 ? parseFloat((valor-parc*(n-1)).toFixed(2)) : parc;
-          rows.push({...base, vencimento:dt.toISOString().slice(0,10), valor:v, cg,
-                     documento: base.documento? base.documento+` (${i+1}/${n})`: null});
-        }
+        const eds=lerParcelasEditor();
+        eds.forEach((p,i)=>rows.push({...base, vencimento:p.vencimento||venc, valor:p.valor, cg,
+                     documento: base.documento? base.documento+` (${i+1}/${eds.length})`: null}));
       }
       await sb('despesas',{method:'POST',body:JSON.stringify(rows)});
       toast(n>1? `${n} parcelas lançadas.`:'Lançamento salvo.');
@@ -671,7 +768,8 @@ function filtrar(){
   });
 }
 function renderLista(){
-  const list=filtrar();
+  const list=applySort(filtrar());
+  updateSortArrows();
   const aPagar=list.filter(d=>d.status==='A_PAGAR').reduce((s,d)=>s+(+d.valor||0),0);
   const pago=list.filter(d=>d.status==='PAGO').reduce((s,d)=>s+(+d.valor||0),0);
   $('kpis').innerHTML=`
@@ -689,7 +787,7 @@ function renderLista(){
     <td class="forn-cell">
       <div class="forn-nome">${esc(d.fornecedor||'—')}</div>
       ${d.documento?`<div class="forn-doc">${esc(d.documento)}</div>`:''}
-      ${(d.boleto||d.nf)?`<div class="anx-row">${d.boleto?`<a class="anx-link" href="${publicUrl(d.boleto)}" target="_blank">🏦 boleto</a>`:''}${d.nf?`<a class="anx-link nf" href="${publicUrl(d.nf)}" target="_blank">📎 NF</a>`:''}</div>`:''}
+      ${(anexoArr(d.boleto).length||anexoArr(d.nf).length)?`<div class="anx-row">${anexoArr(d.boleto).map((p,i,a)=>`<a class="anx-link" href="${publicUrl(p)}" target="_blank">🏦 boleto${a.length>1?' '+(i+1):''}</a>`).join('')}${anexoArr(d.nf).map((p,i,a)=>`<a class="anx-link nf" href="${publicUrl(p)}" target="_blank">📎 NF${a.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}
     </td>
     <td class="nowrap"><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
     <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
@@ -752,11 +850,12 @@ function editar(id){
   $('f_motorista').value=d.motorista||''; $('f_frete').value=d.frete_id||''; $('f_data_doc').value=d.data_doc||'';
   $('f_vencimento').value=d.vencimento||''; $('f_valor').value=d.valor||''; $('f_forma').value=d.forma_pagamento||'PIX';
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
+  $('parcelas-editor').style.display='none'; $('parcelas-rows').innerHTML='';
   $('f_rateio').checked=false; $('f_rateio').disabled=true; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false; $('f_valor').readOnly=false; $('btnSalvar').disabled=false;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
-  pendingAnexo=null; $('f_anexo').value=''; _boxSet($('f_anexo')); if(d.nf) $('anexo-info').textContent='📎 NF atual — envie outro para substituir';
-  pendingBoleto=null; $('f_boleto').value=''; _boxSet($('f_boleto')); if(d.boleto) $('boleto-info').textContent='🏦 boleto atual — envie outro para substituir';
+  keepBoletos=anexoArr(d.boleto); keepNfs=anexoArr(d.nf); pendingBoletos=[]; pendingNfs=[];
+  $('f_boleto').value=''; $('f_anexo').value=''; renderChips('boleto'); renderChips('nf');
   $('btnSalvar').textContent='✓ Atualizar';
   showView('novo'); window.scrollTo({top:0});
 }
@@ -776,8 +875,9 @@ function limparForm(){
   if($('rateio-rows')) $('rateio-rows').innerHTML=''; if($('rateio-box')) $('rateio-box').style.display='none';
   if($('f_placa')) $('f_placa').disabled=false; if($('rt-soma')) $('rt-soma').textContent='Rateio: R$ 0,00';
   if($('rt-total')) $('rt-total').value=''; if($('f_valor')) $('f_valor').readOnly=false; if($('btnSalvar')) $('btnSalvar').disabled=false;
-  pendingAnexo=null; if($('f_anexo')){$('f_anexo').value=''; _boxSet($('f_anexo'));}
-  pendingBoleto=null; if($('f_boleto')){$('f_boleto').value=''; _boxSet($('f_boleto'));}
+  pendingBoletos=[]; pendingNfs=[]; keepBoletos=[]; keepNfs=[];
+  if($('f_boleto'))$('f_boleto').value=''; if($('f_anexo'))$('f_anexo').value=''; renderChips('boleto'); renderChips('nf');
+  if($('parcelas-editor')){$('parcelas-editor').style.display='none'; $('parcelas-rows').innerHTML='';} if($('parc-soma'))$('parc-soma').textContent='';
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
 }
 
