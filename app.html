@@ -193,6 +193,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
     <span class="user-badge" id="userBadge"></span>
     <button class="nav-tab" id="btn-receitas" style="display:none" onclick="location.href='app-receitas.html'">$ Receitas</button>
     <button class="nav-tab brown" id="btn-endiv" style="display:none" onclick="location.href='app-endividamento.html'">◷ Endividamento</button>
+    <button class="btn-h" id="btn-relatorios" onclick="location.href='app-relatorios.html'">⤓ Relatórios</button>
     <button class="btn-h" id="btn-config" style="display:none" onclick="location.href='app-config.html'">⚙ Config</button>
     <button class="btn-h" onclick="sair()">⎋ Sair</button>
   </div>
@@ -299,7 +300,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
         <div class="grid four">
           <div class="field"><label>Valor (R$) <span class="req">★</span></label><input type="number" step="0.01" min="0" id="f_valor" placeholder="0,00" oninput="onValorChange()"></div>
           <div class="field"><label>Parcelas</label><input type="number" min="1" max="36" id="f_parcelas" value="1" oninput="onParcelasChange()"></div>
-          <div class="field"><label>Conta (ao dar baixa)</label><input id="f_conta" placeholder="Banco/caixa" disabled></div>
+          <div class="field"><label>Conta</label><select id="f_conta"></select></div>
           <div class="field">
             <label>Forma de pagamento</label>
             <select id="f_forma"><option>PIX</option><option>BOLETO</option><option>TRANSFERÊNCIA</option><option>DINHEIRO</option><option>CARTÃO</option></select>
@@ -364,6 +365,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
       <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
       <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
+      <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-primary btn-sm" onclick="exportarCSV()">⤓ Exportar</button></div>
     </div>
 
     <div class="sel-bar" id="sel-bar" style="display:none">
@@ -392,6 +394,22 @@ td.nowrap,th.nowrap{white-space:nowrap;}
   </div>
 </div>
 
+<div id="bxOverlay" style="display:none;position:fixed;inset:0;background:rgba(39,64,31,.5);backdrop-filter:blur(3px);z-index:400;align-items:flex-start;justify-content:center;padding:46px 16px;">
+  <div style="background:#fff;border-radius:16px;max-width:440px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--creme-dark);font-family:'Syne',sans-serif;font-weight:700;color:var(--verde)" id="bx-titulo">Dar baixa</div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div id="bx-resumo" style="font-size:13px;color:var(--cinza)"></div>
+      <div class="field"><label>Data do pagamento <span class="req">★</span></label><input type="date" id="bx-data"></div>
+      <div class="field"><label>Conta utilizada <span class="req">★</span></label><select id="bx-conta"></select></div>
+      <div class="field" id="bx-juros-field"><label>Juros / multa (R$)</label><input type="number" step="0.01" min="0" id="bx-juros" placeholder="0,00"></div>
+    </div>
+    <div style="padding:16px 20px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme)">
+      <button class="btn btn-ghost" onclick="fecharBaixa()">Cancelar</button>
+      <button class="btn btn-primary" id="bx-btn" onclick="confirmarBaixa()">✓ Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div class="loading hidden" id="loading"><div class="spinner"></div><div class="t">Carregando…</div></div>
 
@@ -411,6 +429,9 @@ if(!currentUser) location.href = 'index.html';
 function hasPerm(p){ return currentRole==='gestor' || currentPerms[p]===true; }
 function sair(){ sessionStorage.clear(); location.href='index.html'; }
 
+const CONTAS=['LOG BB','JOAO PF','IVAN PF','LOG BRADESCO','LOG CEF'];
+function contaOptions(sel){ return ['<option value="">Selecionar…</option>'].concat(CONTAS.map(c=>`<option${sel===c?' selected':''}>${c}</option>`)).join(''); }
+
 (function applyPerms(){
   document.getElementById('userBadge').textContent = currentNome;
   // Receitas: visível salvo bloqueio explícito
@@ -418,6 +439,8 @@ function sair(){ sessionStorage.clear(); location.href='index.html'; }
     document.getElementById('btn-receitas').style.display='';
   if(hasPerm('endividamento')) document.getElementById('btn-endiv').style.display='';
   if(hasPerm('configuracoes')) document.getElementById('btn-config').style.display='';
+  if(!hasPerm('exportar')) document.getElementById('btn-relatorios').style.display='none';
+  const fc=document.getElementById('f_conta'); if(fc) fc.innerHTML=contaOptions('');
 })();
 
 /* ===================== SUPABASE REST ===================== */
@@ -791,7 +814,7 @@ function renderLista(){
     </td>
     <td class="nowrap"><span class="tipo-tag">${esc(d.tipo_despesa||'—')}</span></td>
     <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
-    <td class="val">${money(d.valor)}</td>
+    <td class="val">${money(d.valor)}${(+d.juros>0)?`<div style="font-size:10px;color:var(--amber);font-weight:600">+ juros ${money(d.juros)}</div>`:''}</td>
     <td class="nowrap" style="text-align:center"><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
     <td class="nowrap mono">${esc(d.conta||'—')}</td>
     <td class="nowrap"><div class="row-actions">
@@ -816,32 +839,65 @@ function onSel(){
 }
 function toggleAll(cb){ document.querySelectorAll('.row-chk').forEach(c=>c.checked=cb.checked); onSel(); }
 function limparSel(){ document.querySelectorAll('.row-chk').forEach(c=>c.checked=false); onSel(); }
-async function baixaSelecionados(){
+let baixaAlvo=null;   // {modo:'single'|'lote', ids:[...]}
+
+function darBaixa(id){
+  const d=despesas.find(x=>x.id===id); if(!d) return;
+  baixaAlvo={modo:'single', ids:[id]};
+  $('bx-titulo').textContent='Dar baixa';
+  $('bx-resumo').textContent=`${esc(d.fornecedor||'—')} · ${esc(d.tipo_despesa||'')} · ${money(d.valor)}`;
+  $('bx-data').value=new Date().toISOString().slice(0,10);
+  $('bx-conta').innerHTML=contaOptions(d.conta||'');
+  $('bx-juros').value=''; $('bx-juros-field').style.display='';
+  $('bxOverlay').style.display='flex';
+}
+function baixaSelecionados(){
   const ids=[...document.querySelectorAll('.row-chk:checked')].map(c=>Number(c.value));
   const alvos=ids.map(id=>despesas.find(d=>d.id===id)).filter(d=>d&&d.status==='A_PAGAR');
-  const jaPagos=ids.length-alvos.length;
   if(!alvos.length){ toast('Nenhum lançamento "a pagar" na seleção.',true); return; }
   const total=alvos.reduce((s,d)=>s+(+d.valor||0),0);
-  const data=prompt(`Baixar ${alvos.length} lançamento(s) — total ${money(total)}.\nData do pagamento (AAAA-MM-DD):`, new Date().toISOString().slice(0,10)); if(!data) return;
-  const conta=prompt('Conta / banco do pagamento (opcional):','')||null;
-  setSync('sync'); showLoading(true);
+  baixaAlvo={modo:'lote', ids:alvos.map(d=>d.id)};
+  $('bx-titulo').textContent='Baixa em lote';
+  $('bx-resumo').textContent=`${alvos.length} lançamento(s) selecionado(s) — total ${money(total)}`;
+  $('bx-data').value=new Date().toISOString().slice(0,10);
+  $('bx-conta').innerHTML=contaOptions('');
+  $('bx-juros').value=''; $('bx-juros-field').style.display='none';  // juros não se aplica em lote
+  $('bxOverlay').style.display='flex';
+}
+function fecharBaixa(){ $('bxOverlay').style.display='none'; baixaAlvo=null; }
+async function confirmarBaixa(){
+  if(!baixaAlvo) return;
+  const data=$('bx-data').value; if(!data){ toast('Informe a data do pagamento.',true); return; }
+  const conta=$('bx-conta').value||null; if(!conta){ toast('Selecione a conta utilizada.',true); return; }
+  const juros=baixaAlvo.modo==='single' ? (parseFloat($('bx-juros').value)||0) : 0;
+  const btn=$('bx-btn'); btn.disabled=true; btn.textContent='Salvando…'; setSync('sync'); showLoading(true);
   try{
-    await Promise.all(alvos.map(d=>sb(`despesas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'PAGO',pagamento:data,conta})})));
-    toast(`${alvos.length} baixado(s)${jaPagos?` · ${jaPagos} já estava(m) pago(s)`:''}.`); setSync('online');
-    await carregar();
-  }catch(e){ console.error(e); setSync('err'); toast('Erro na baixa em lote.',true); }
-  finally{ showLoading(false); }
+    const patch=id=>{ const body={status:'PAGO',pagamento:data,conta}; if(baixaAlvo.modo==='single') body.juros=juros; return sb(`despesas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify(body)}); };
+    await Promise.all(baixaAlvo.ids.map(patch));
+    toast(baixaAlvo.modo==='lote'? `${baixaAlvo.ids.length} baixado(s).` : 'Baixa registrada.');
+    setSync('online'); fecharBaixa(); await carregar();
+  }catch(e){ console.error(e); setSync('err'); toast('Erro ao dar baixa: '+e.message,true); }
+  finally{ btn.disabled=false; btn.textContent='✓ Confirmar'; showLoading(false); }
 }
 
-async function darBaixa(id){
-  const d=despesas.find(x=>x.id===id); if(!d) return;
-  const data=prompt('Data do pagamento (AAAA-MM-DD):', new Date().toISOString().slice(0,10)); if(!data) return;
-  const conta=prompt('Conta / banco do pagamento:','') || null;
-  setSync('sync');
-  try{ await sb(`despesas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'PAGO',pagamento:data,conta})});
-    toast('Baixa registrada.'); setSync('online'); await carregar();
-  }catch(e){ setSync('err'); toast('Erro ao dar baixa.',true); }
+/* ===================== EXPORTAR CSV ===================== */
+function csvCell(v){ const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[";\n]/.test(s)? `"${s}"` : s; }
+function exportarCSV(){
+  const list=applySort(filtrar());
+  if(!list.length){ toast('Nada para exportar com os filtros atuais.',true); return; }
+  const head=['Vencimento','Fornecedor','Documento','Tipo','Placa','Motorista','Valor','Juros','Status','Pagamento','Conta','Forma','Observação'];
+  const linhas=list.map(d=>[fdate(d.vencimento),d.fornecedor,d.documento,d.tipo_despesa,d.placa,d.motorista,
+    (Number(d.valor)||0).toFixed(2).replace('.',','),(Number(d.juros)||0).toFixed(2).replace('.',','),
+    d.status==='PAGO'?'PAGO':'A PAGAR',fdate(d.pagamento),d.conta,d.forma_pagamento,d.historico].map(csvCell).join(';'));
+  const total=list.reduce((s,d)=>s+(+d.valor||0),0);
+  linhas.push(''); linhas.push(['TOTAL','','','','','',total.toFixed(2).replace('.',','),'','','','','',''].map(csvCell).join(';'));
+  const csv='\uFEFF'+[head.join(';'),...linhas].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`despesas_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast(`${list.length} lançamento(s) exportado(s).`);
 }
+
 function editar(id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
   editingId=id;
