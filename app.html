@@ -99,7 +99,7 @@ textarea{resize:vertical;min-height:64px;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px;}
 .kpi{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 18px;}
 .kpi .l{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);}
-.kpi .v{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--verde);margin-top:4px;}
+.kpi .v{font-family:'DM Sans',sans-serif;font-weight:700;font-size:22px;color:var(--verde);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .tbl-wrap{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;overflow-x:auto;}
 table{width:100%;border-collapse:collapse;}
 thead th{background:var(--verde);color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:11px 11px;text-align:left;white-space:nowrap;}
@@ -434,6 +434,10 @@ td.nowrap,th.nowrap{white-space:nowrap;}
 <div class="viewer" id="viewer">
   <div class="viewer-bar">
     <span class="vtitle" id="viewer-title">Anexo</span>
+    <span id="viewer-nav" style="display:none;gap:6px;align-items:center">
+      <button onclick="viewerPrev()" title="Anterior">‹ anterior</button>
+      <button onclick="viewerNext()" title="Próximo">próximo ›</button>
+    </span>
     <a id="viewer-download" href="#" download>⤓ Baixar</a>
     <button onclick="fecharViewer()">✕ Fechar</button>
   </div>
@@ -592,13 +596,28 @@ function verPending(kind,which,i){
   else { const f=(kind==='boleto'?pendingBoletos:pendingNfs)[i]; verAnexo(URL.createObjectURL(f),f.name,/^image\//.test(f.type)); }
 }
 function verAnexoPath(path,nome){ verAnexo(publicUrl(path),nome,isImgUrl(path)); }
-function verAnexo(url,nome,isImg){
-  $('viewer-title').textContent=nome||'Anexo';
-  $('viewer-download').href=url;
-  $('viewer-body').innerHTML = isImg ? `<img src="${url}" alt="">` : `<iframe src="${url}"></iframe>`;
+let viewerList=[], viewerIdx=0;
+function verDoc(kind,id){
+  const d=despesas.find(x=>x.id===id); if(!d) return;
+  const paths=anexoArr(kind==='boleto'?d.boleto:d.nf); if(!paths.length) return;
+  const rot = kind==='boleto'?'Boleto':'NF';
+  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p)}));
+  showViewerAt(0);
+}
+function verAnexo(url,nome,isImg){ viewerList=[{url,nome,isImg}]; showViewerAt(0); }
+function showViewerAt(i){
+  if(!viewerList.length) return;
+  viewerIdx=(i+viewerList.length)%viewerList.length;
+  const it=viewerList[viewerIdx];
+  $('viewer-title').textContent=it.nome + (viewerList.length>1?` (${viewerIdx+1}/${viewerList.length})`:'');
+  $('viewer-download').href=it.url;
+  $('viewer-body').innerHTML = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
+  $('viewer-nav').style.display = viewerList.length>1 ? 'inline-flex' : 'none';
   $('viewer').classList.add('show');
 }
-function fecharViewer(){ $('viewer').classList.remove('show'); $('viewer-body').innerHTML=''; }
+function viewerPrev(){ showViewerAt(viewerIdx-1); }
+function viewerNext(){ showViewerAt(viewerIdx+1); }
+function fecharViewer(){ $('viewer').classList.remove('show'); $('viewer-body').innerHTML=''; viewerList=[]; }
 
 /* ===================== RATEIO ===================== */
 function toggleRateio(){
@@ -914,7 +933,7 @@ function renderLista(){
     <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
     <td class="val">${money(d.valor)}${(+d.juros>0)?`<div style="font-size:10px;color:var(--amber);font-weight:600">+ juros ${money(d.juros)}</div>`:''}</td>
     <td class="nowrap" style="text-align:center"><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
-    <td class="nowrap"><div class="docs-cell">${nb?`<span class="doc-badge b" onclick="openDetalhe(${d.id})">B${nb>1?nb:''}</span>`:''}${nn?`<span class="doc-badge nf" onclick="openDetalhe(${d.id})">NF${nn>1?nn:''}</span>`:''}${(!nb&&!nn)?'<span class="doc-empty">—</span>':''}</div></td>
+    <td class="nowrap"><div class="docs-cell">${nb?`<span class="doc-badge b" onclick="verDoc('boleto',${d.id})" title="Ver boleto">B${nb>1?nb:''}</span>`:''}${nn?`<span class="doc-badge nf" onclick="verDoc('nf',${d.id})" title="Ver nota">NF${nn>1?nn:''}</span>`:''}${(!nb&&!nn)?'<span class="doc-empty">—</span>':''}</div></td>
     <td class="nowrap mono">${esc(d.conta||'—')}</td>
     <td class="nowrap"><div class="row-actions">
       ${d.status==='A_PAGAR'?`<button class="btn btn-sm btn-primary" onclick="darBaixa(${d.id})">Baixa</button>`:''}
