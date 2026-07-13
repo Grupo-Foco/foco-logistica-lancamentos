@@ -84,10 +84,10 @@ textarea{resize:vertical;min-height:60px;}
 .btn-danger{background:var(--erro);color:#fff;}
 .btn-marrom{background:var(--marrom);color:#fff;}
 
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
-.kpi{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 18px;}
-.kpi .l{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);}
-.kpi .v{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--verde);margin-top:4px;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:18px;}
+.kpi{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 18px;min-width:0;overflow:hidden;}
+.kpi .l{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi .v{font-family:'DM Sans',sans-serif;font-weight:700;font-size:clamp(17px,1.7vw,22px);color:var(--verde);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .kpi.amber .v{color:var(--amber);} .kpi.green .v{color:var(--sucesso);}
 
 .toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;}
@@ -100,20 +100,25 @@ textarea{resize:vertical;min-height:60px;}
 .frete-cli{font-weight:700;font-size:16px;}
 .frete-rota{font-size:13px;color:var(--cinza);}
 .frete-rota b{color:var(--texto);}
-.frete-val{margin-left:auto;text-align:right;}
-.frete-val .vt{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--verde);}
-.frete-val .vs{font-size:11px;color:var(--cinza);font-family:'DM Mono',monospace;}
+.frete-val{margin-left:auto;text-align:right;flex-shrink:0;}
+.frete-val .vt{font-family:'DM Sans',sans-serif;font-weight:700;font-size:18px;color:var(--verde);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.frete-val .vs{font-size:11px;color:var(--cinza);font-family:'DM Mono',monospace;white-space:nowrap;}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;}
 .badge.andamento{background:var(--amber-bg);color:var(--amber);}
 .badge.concluido{background:#dcecdf;color:var(--sucesso);}
 .badge.cancelado{background:#eee;color:#999;}
 .frete-body{padding:8px 20px 16px;}
 .ptable{width:100%;border-collapse:collapse;}
-.ptable th{text-align:left;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);padding:8px 6px;}
-.ptable td{padding:8px 6px;border-top:1px solid var(--creme-dark);font-size:13.5px;}
+.ptable th{text-align:left;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);padding:8px 10px;}
+.ptable td{padding:9px 10px;border-top:1px solid var(--creme-dark);font-size:13.5px;vertical-align:middle;}
+.ptable th:nth-child(1),.ptable td:nth-child(1){width:130px;}
+.ptable th:nth-child(2),.ptable td:nth-child(2){width:120px;white-space:nowrap;}
+.ptable th:nth-child(3),.ptable td:nth-child(3){width:140px;text-align:right;}
+.ptable th:nth-child(4),.ptable td:nth-child(4){width:210px;}
+.ptable th:nth-child(5),.ptable td:nth-child(5){text-align:right;}
 .ptag{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--creme-dark);color:var(--marrom-dark);}
 .ptag.ant{background:#e7eede;color:var(--verde-mid);}
-.pmoney{font-family:'DM Mono',monospace;text-align:right;}
+.pmoney{font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .pst{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;}
 .pst.prev{color:var(--amber);} .pst.rec{color:var(--sucesso);}
 .frete-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:12px;border-top:1px solid var(--creme-dark);}
