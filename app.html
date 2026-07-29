@@ -102,8 +102,8 @@ textarea{resize:vertical;min-height:64px;}
 .kpi .v{font-family:'DM Sans',sans-serif;font-weight:700;font-size:22px;color:var(--verde);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .tbl-wrap{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;overflow-x:auto;}
 table{width:100%;border-collapse:collapse;}
-thead th{background:var(--verde);color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:11px 11px;text-align:left;white-space:nowrap;}
-tbody td{padding:11px 11px;border-bottom:1px solid var(--creme-dark);font-size:13.5px;vertical-align:middle;}
+thead th{background:var(--verde);color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:11px 9px;text-align:left;white-space:nowrap;}
+tbody td{padding:11px 9px;border-bottom:1px solid var(--creme-dark);font-size:13.5px;vertical-align:middle;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--creme);}
 tbody tr.sel-row{background:#eef3e7;}
@@ -111,8 +111,10 @@ tbody tr.sel-row:hover{background:#e7efdd;}
 td.nowrap,th.nowrap{white-space:nowrap;}
 .chk-cell{width:38px;text-align:center;padding-right:0;}
 .chk-cell input,thead .chk-cell input{width:16px;height:16px;cursor:pointer;accent-color:var(--verde-light);}
-.forn-cell{min-width:170px;max-width:230px;}
+.forn-cell{min-width:150px;max-width:200px;}
 .forn-nome{font-weight:700;line-height:1.2;white-space:normal;}
+.row-actions{display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap;}
+td:last-child{white-space:nowrap;}
 .forn-nome{font-weight:700;line-height:1.25;}
 .forn-doc{font-family:'DM Mono',monospace;color:var(--cinza);font-size:11px;margin-top:1px;}
 .anx-row{display:flex;gap:6px;margin-top:5px;}
@@ -389,7 +391,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
 
 <!-- ===================== PAINEL ===================== -->
 <div class="view" id="view-painel">
-  <div class="wrap" style="max-width:1180px">
+  <div class="wrap" style="max-width:1240px">
     <div class="page-h"><h1>Painel de despesas</h1><p id="painel-sub">—</p></div>
 
     <div class="kpis" id="kpis"></div>
@@ -401,6 +403,7 @@ td.nowrap,th.nowrap{white-space:nowrap;}
       <div class="field"><label>Tipo</label><select id="flt-tipo" onchange="renderLista()"><option value="">Todos</option></select></div>
       <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
       <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
+      <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="limparFiltros()">✕ Limpar</button></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-primary btn-sm" onclick="exportarCSV()">⤓ Exportar</button></div>
     </div>
@@ -1031,6 +1034,11 @@ async function confirmarBaixa(){
 
 /* ===================== EXPORTAR CSV ===================== */
 function csvCell(v){ const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[";\n]/.test(s)? `"${s}"` : s; }
+function limparFiltros(){
+  ['flt-busca','flt-de','flt-ate'].forEach(id=>{ if($(id))$(id).value=''; });
+  ['flt-status','flt-placa','flt-tipo'].forEach(id=>{ if($(id))$(id).value=''; });
+  renderLista();
+}
 function exportarCSV(){
   const list=applySort(filtrar());
   if(!list.length){ toast('Nada para exportar com os filtros atuais.',true); return; }
