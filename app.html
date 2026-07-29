@@ -557,7 +557,7 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let despesas=[], caminhoesBD=[], fornecedoresBD=[], motoristasBD=[], fretesBD=[];
-let editingId=null, statusAtual='A_PAGAR';
+let editingId=null, editingCg=null, statusAtual='A_PAGAR';
 let pendingBoletos=[], pendingNfs=[], keepBoletos=[], keepNfs=[];
 let sortState={col:'vencimento',dir:'desc'};
 
@@ -636,10 +636,16 @@ function fecharViewer(){ $('viewer').classList.remove('show'); $('viewer-body').
 /* ===================== RATEIO ===================== */
 function toggleRateio(){
   const on=$('f_rateio').checked;
+  const curPlaca=$('f_placa').value, curValor=$('f_valor').value;
   $('rateio-box').style.display=on?'block':'none';
   $('f_placa').disabled=on; if(on) $('f_placa').value='';
   $('f_valor').readOnly=on;                       // total passa a ser controlado pelo rateio
-  if(on){ $('rt-total').value=$('f_valor').value||''; if(!$('rateio-rows').children.length){ addRateioRow('',''); addRateioRow('',''); } }
+  if(on){ $('rt-total').value=curValor||'';
+    if(!$('rateio-rows').children.length){
+      if(editingId && curPlaca){ addRateioRow(curPlaca,curValor); addRateioRow('',''); }
+      else { addRateioRow('',''); addRateioRow('',''); }
+    }
+  }
   gerarParcelas();
   rateioSoma();
 }
@@ -827,7 +833,7 @@ function updateSortArrows(){
 async function salvar(){
   const tipo=$('f_tipo').value, forn=$('f_fornecedor').value.trim(), placa=$('f_placa').value.trim().toUpperCase();
   const valor=parseFloat($('f_valor').value), venc=$('f_vencimento').value;
-  const rateio = $('f_rateio').checked && !editingId;
+  const rateio = $('f_rateio').checked;
   if(!tipo){ toast('Selecione o tipo de despesa.',true); return; }
   if(!forn){ toast('Informe o fornecedor.',true); return; }
   if(!rateio && !placa){ toast('Informe a placa do caminhão.',true); return; }
@@ -864,21 +870,21 @@ async function salvar(){
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(base.motorista);
 
-    if(editingId){
+    if(editingId && !rateio){
       await sb(`despesas?id=eq.${editingId}`,{method:'PATCH',body:JSON.stringify({...base, vencimento:venc, valor})});
       toast('Lançamento atualizado.');
     } else if(rateio){
       const cg='RT'+Date.now();
       for(const x of rt){ await salvarCaminhaoSeNovo(x.placa); }
-      const nP=Math.max(1,Math.min(36,parseInt($('f_parcelas').value)||1));
+      const nP = editingId ? 1 : Math.max(1,Math.min(36,parseInt($('f_parcelas').value)||1));
       const rows=[];
       if(nP===1){
         rt.forEach(x=>rows.push({...base, placa:x.placa, valor:x.valor, vencimento:venc, cg}));
       } else {
         const eds=lerParcelasEditor();
         eds.forEach((p,i)=>{
-          const alvo=+(p.valor||0).toFixed(2);            // quanto essa parcela vale
-          const frac= valor>0 ? alvo/valor : 0;           // fatia da parcela sobre o total
+          const alvo=+(p.valor||0).toFixed(2);
+          const frac= valor>0 ? alvo/valor : 0;
           let acc=0;
           rt.forEach((x,j)=>{
             let v = j===rt.length-1 ? +(alvo-acc).toFixed(2) : +(x.valor*frac).toFixed(2);
@@ -888,9 +894,14 @@ async function salvar(){
           });
         });
       }
+      if(editingId){                                   // edição: remove o lançamento (ou o grupo de rateio) original
+        if(editingCg){ await sb(`despesas?cg=eq.${encodeURIComponent(editingCg)}`,{method:'DELETE'}); }
+        else{ await sb(`despesas?id=eq.${editingId}`,{method:'DELETE'}); }
+      }
       await sb('despesas',{method:'POST',body:JSON.stringify(rows)});
-      toast(nP>1? `${nP} parcelas × ${rt.length} caminhão(ões) = ${rows.length} lançamentos.`
-                : `Rateio lançado em ${rt.length} caminhão(ões).`);
+      toast(editingId ? `Lançamento rateado em ${rt.length} caminhão(ões).`
+           : (nP>1? `${nP} parcelas × ${rt.length} caminhão(ões) = ${rows.length} lançamentos.`
+                  : `Rateio lançado em ${rt.length} caminhão(ões).`));
     } else {
       const n=Math.max(1,Math.min(36,parseInt($('f_parcelas').value)||1));
       const rows=[];
@@ -1095,14 +1106,14 @@ function detExcluir(){ const id=detalheId; fecharDetalhe(); excluir(id); }
 
 function editar(id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
-  editingId=id;
+  editingId=id; editingCg=d.cg||null;
   $('f_tipo').value=d.tipo_despesa||''; $('f_fornecedor').value=d.fornecedor||''; $('f_cnpj').value=d.cnpj||'';
   $('f_documento').value=d.documento||''; $('f_pix').value=d.chave_pix||''; $('f_placa').value=d.placa||'';
   $('f_motorista').value=d.motorista||''; $('f_frete').value=d.frete_id||''; $('f_data_doc').value=d.data_doc||'';
   $('f_vencimento').value=d.vencimento||''; $('f_valor').value=d.valor||''; $('f_forma').value=d.forma_pagamento||'PIX';
   $('f_historico').value=d.historico||''; $('f_parcelas').value=1; $('f_parcelas').disabled=true;
   $('parcelas-editor').style.display='none'; $('parcelas-rows').innerHTML='';
-  $('f_rateio').checked=false; $('f_rateio').disabled=true; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false; $('f_valor').readOnly=false; $('btnSalvar').disabled=false;
+  $('f_rateio').checked=false; $('f_rateio').disabled=false; $('rateio-box').style.display='none'; $('rateio-rows').innerHTML=''; $('f_placa').disabled=false; $('f_valor').readOnly=false; $('btnSalvar').disabled=false;
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
   keepBoletos=anexoArr(d.boleto); keepNfs=anexoArr(d.nf); pendingBoletos=[]; pendingNfs=[];
@@ -1119,7 +1130,7 @@ async function excluir(id){
 }
 
 function limparForm(){
-  editingId=null;
+  editingId=null; editingCg=null;
   ['f_tipo','f_fornecedor','f_cnpj','f_documento','f_pix','f_placa','f_motorista','f_frete','f_data_doc','f_vencimento','f_pagamento','f_valor','f_conta','f_historico'].forEach(id=>$(id).value='');
   $('f_parcelas').value=1; $('f_parcelas').disabled=false; $('f_forma').value='PIX';
   if($('f_rateio')){ $('f_rateio').checked=false; $('f_rateio').disabled=false; }
