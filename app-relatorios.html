@@ -161,6 +161,14 @@ async function carregar(){
 
 function filtros(){ return {de:$('f-de').value, ate:$('f-ate').value, placa:$('f-placa').value, cat:$('f-cat').value}; }
 function inPer(dtISO, de, ate){ if(!dtISO) return !de&&!ate?true:false; const x=String(dtISO).slice(0,10); return (!de||x>=de)&&(!ate||x<=ate); }
+function freteNoPer(f, de, ate){
+  if(!de && !ate) return true;
+  const ps = parcelas.filter(p=>p.frete_id===f.id);
+  const datas=[f.data_carregamento, f.data_descarregamento, ...ps.flatMap(p=>[p.previsao,p.data_recebimento])]
+    .filter(Boolean).map(x=>String(x).slice(0,10));
+  if(!datas.length) datas.push(String(f.created_at||'').slice(0,10));
+  return datas.some(x => x && (!de||x>=de) && (!ate||x<=ate));
+}
 function despFiltradas(){
   const {de,ate,placa,cat}=filtros();
   return despesas.filter(d=>{
@@ -260,7 +268,7 @@ function renderBalanco(){
   const placas=[...new Set([...despesas.map(d=>d.placa),...fretes.map(f=>f.placa)].filter(Boolean))].filter(p=>!placa||p===placa).sort();
   const rows=placas.map(p=>{
     const desp=despesas.filter(d=>d.placa===p && inPer(d.vencimento,de,ate)).reduce((s,d)=>s+(+d.valor||0),0);
-    const frs=fretes.filter(f=>f.placa===p && inPer(f.data_carregamento||f.created_at,de,ate));
+    const frs=fretes.filter(f=>f.placa===p && freteNoPer(f,de,ate));
     const rec=frs.reduce((s,f)=>s+(+f.valor_total||0),0);
     return {p, rec, desp, res:rec-desp, nf:frs.length};
   }).filter(r=>r.rec!==0 || r.desp!==0);
