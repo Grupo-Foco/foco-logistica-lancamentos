@@ -44,7 +44,7 @@ input:focus,select:focus{border-color:var(--verde-light);}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px;}
 .kpi{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
 .kpi .l{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);}
-.kpi .v{font-family:'Syne',sans-serif;font-weight:800;font-size:23px;color:var(--verde);margin-top:4px;}
+.kpi .v{font-family:'DM Sans',sans-serif;font-weight:700;font-size:23px;color:var(--verde);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .kpi.amber .v{color:var(--amber);} .kpi.green .v{color:var(--sucesso);} .kpi.red .v{color:var(--erro);}
 .card{background:var(--branco);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
 .card-top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--creme-dark);}
@@ -124,6 +124,7 @@ if(!hasPerm('exportar')){ alert('Sem acesso aos Relatórios.'); location.href='a
 const $=id=>document.getElementById(id);
 $('userBadge').textContent=currentNome;
 async function sb(path){ const r=await fetch(`${SB_URL}/rest/v1/${path}`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}}); if(!r.ok) throw new Error(r.status); return r.json(); }
+async function sbAll(path){ const sep=path.includes('?')?'&':'?'; let all=[],offset=0; const batch=1000; for(let i=0;i<200;i++){ const rows=await sb(`${path}${sep}limit=${batch}&offset=${offset}`); all=all.concat(rows||[]); if(!rows||rows.length<batch) break; offset+=batch; } return all; }
 function setSync(s){ const d=$('syncDot'),t=$('syncTxt'); d.className='dot '+(s==='online'?'online':s==='err'?'err':''); t.textContent=s==='online'?'online':s==='err'?'erro':'sincronizando…'; }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){return (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
@@ -137,9 +138,9 @@ async function carregar(){
   setSync('sync'); showLoading(true);
   try{
     const [de,fr,pa]=await Promise.all([
-      sb('despesas?order=vencimento.asc&limit=20000'),
-      sb('fretes?order=data_carregamento.asc&limit=8000').catch(()=>[]),
-      sb('receita_parcelas?limit=30000').catch(()=>[]),
+      sbAll('despesas?order=vencimento.asc'),
+      sbAll('fretes?order=data_carregamento.asc').catch(()=>[]),
+      sbAll('receita_parcelas').catch(()=>[]),
     ]);
     despesas=de||[]; fretes=fr||[]; parcelas=pa||[];
     const placas=[...new Set([...despesas.map(d=>d.placa),...fretes.map(f=>f.placa)].filter(Boolean))].sort();

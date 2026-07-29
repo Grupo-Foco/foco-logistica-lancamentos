@@ -527,6 +527,17 @@ async function sb(path, opts={}){
   if(!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
   const t = await r.text(); return t?JSON.parse(t):[];
 }
+async function sbAll(path){
+  const sep = path.includes('?') ? '&' : '?';
+  let all=[], offset=0; const batch=1000;
+  for(let i=0;i<200;i++){
+    const rows = await sb(`${path}${sep}limit=${batch}&offset=${offset}`);
+    all = all.concat(rows||[]);
+    if(!rows || rows.length < batch) break;
+    offset += batch;
+  }
+  return all;
+}
 function setSync(state){
   const d=document.getElementById('syncDot'), t=document.getElementById('syncTxt');
   d.className='dot '+(state==='online'?'online':state==='err'?'err':'');
@@ -718,9 +729,9 @@ async function carregar(){
   setSync('sync'); showLoading(true);
   try{
     const [d,c,f,m,fr] = await Promise.all([
-      sb('despesas?order=vencimento.asc&limit=3000'),
+      sbAll('despesas?order=vencimento.asc'),
       sb('caminhoes?order=placa.asc&limit=2000').catch(()=>[]),
-      sb('fornecedores?order=nome.asc&limit=3000').catch(()=>[]),
+      sbAll('fornecedores?order=nome.asc').catch(()=>[]),
       sb('motoristas?order=nome.asc&limit=2000').catch(()=>[]),
       sb('fretes?select=id,codigo,cliente,placa,valor_total&order=created_at.desc&limit=500').catch(()=>[]),
     ]);
