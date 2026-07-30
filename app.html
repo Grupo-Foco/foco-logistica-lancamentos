@@ -401,6 +401,7 @@ td:last-child{white-space:nowrap;}
       <div class="field"><label>Status</label><select id="flt-status" onchange="renderLista()"><option value="">Todos</option><option value="A_PAGAR">A pagar</option><option value="PAGO">Pago</option></select></div>
       <div class="field"><label>Placa</label><select id="flt-placa" onchange="renderLista()"><option value="">Todas</option></select></div>
       <div class="field"><label>Tipo</label><select id="flt-tipo" onchange="renderLista()"><option value="">Todos</option></select></div>
+      <div class="field"><label>Forma</label><select id="flt-forma" onchange="renderLista()"><option value="">Todas</option></select></div>
       <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
       <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="limparFiltros()">✕ Limpar</button></div>
@@ -760,6 +761,8 @@ function preencherListas(){
   $('flt-placa').innerHTML='<option value="">Todas</option>'+placas.map(p=>`<option>${esc(p)}</option>`).join('');
   const tipos=[...new Set(despesas.map(d=>d.tipo_despesa).filter(Boolean))].sort();
   $('flt-tipo').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option>${esc(t)}</option>`).join('');
+  const formas=[...new Set(despesas.map(d=>d.forma_pagamento).filter(Boolean))].sort();
+  if($('flt-forma')) $('flt-forma').innerHTML='<option value="">Todas</option>'+formas.map(f=>`<option>${esc(f)}</option>`).join('');
 }
 
 /* ===================== PARCELAS (editor) ===================== */
@@ -940,11 +943,12 @@ async function salvarMotoristaSeNovo(nome){
 /* ===================== LISTA / PAINEL ===================== */
 function filtrar(){
   const q=($('flt-busca').value||'').toLowerCase(), st=$('flt-status').value, pl=$('flt-placa').value, tp=$('flt-tipo').value;
-  const de=$('flt-de').value, ate=$('flt-ate').value;
+  const de=$('flt-de').value, ate=$('flt-ate').value, fp=$('flt-forma')?$('flt-forma').value:'';
   return despesas.filter(d=>{
     if(st && d.status!==st) return false;
     if(pl && d.placa!==pl) return false;
     if(tp && d.tipo_despesa!==tp) return false;
+    if(fp && (d.forma_pagamento||'')!==fp) return false;
     if(de && (d.vencimento||'') < de) return false;
     if(ate && (d.vencimento||'') > ate) return false;
     if(q){ const hay=`${d.fornecedor||''} ${d.documento||''} ${d.motorista||''} ${d.historico||''}`.toLowerCase(); if(!hay.includes(q)) return false; }
@@ -1047,7 +1051,7 @@ async function confirmarBaixa(){
 function csvCell(v){ const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[";\n]/.test(s)? `"${s}"` : s; }
 function limparFiltros(){
   ['flt-busca','flt-de','flt-ate'].forEach(id=>{ if($(id))$(id).value=''; });
-  ['flt-status','flt-placa','flt-tipo'].forEach(id=>{ if($(id))$(id).value=''; });
+  ['flt-status','flt-placa','flt-tipo','flt-forma'].forEach(id=>{ if($(id))$(id).value=''; });
   renderLista();
 }
 function exportarCSV(){
