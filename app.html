@@ -189,6 +189,24 @@ td:last-child{white-space:nowrap;}
 .viewer-body{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;overflow:auto;}
 .viewer-body iframe{background:#fff;width:min(940px,100%);height:100%;border:none;border-radius:8px;}
 .viewer-body img{background:#fff;max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
+.cb-box{margin-top:12px;border:1px solid var(--creme-dark);background:var(--branco);border-radius:12px;padding:14px 16px;}
+.cb-head{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--verde-light);font-weight:600;margin-bottom:8px;}
+.cb-msg{font-size:12px;color:var(--cinza);margin:4px 0;}
+.cb-meta{font-size:13px;color:var(--texto);margin:6px 0 8px;font-family:'DM Sans',sans-serif;}
+.cb-sel{width:100%;margin:4px 0 10px;padding:8px 10px;border:1px solid var(--cinza-light);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;}
+.cb-input{width:100%;padding:10px 12px;border:1px solid var(--cinza-light);border-radius:8px;font-family:'DM Mono',monospace;font-size:13px;}
+.cb-svg{width:100%;max-width:520px;height:auto;display:block;margin:6px 0;}
+.cb-linha{font-family:'DM Mono',monospace;font-size:15px;font-weight:500;color:var(--texto);word-break:break-all;letter-spacing:.02em;margin:6px 0 12px;line-height:1.5;}
+.cb-acts{display:flex;gap:8px;flex-wrap:wrap;}
+.cb-load{font-size:13px;color:var(--cinza);padding:6px 0;}
+.cb-view-wrap{display:flex;flex-direction:column;width:min(940px,100%);height:100%;}
+.cb-band{background:#fff;border-radius:8px 8px 0 0;border-bottom:2px solid var(--creme-dark);padding:14px 18px 16px;}
+.cb-view-wrap iframe{flex:1;width:100%;height:auto;border-radius:0 0 8px 8px;}
+.cb-view-wrap img{max-height:100%;border-radius:0 0 8px 8px;}
+.cb-band-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+.cb-band-t{font-size:13px;color:var(--verde);font-weight:600;font-family:'DM Sans',sans-serif;}
+.cb-band .cb-svg{max-width:640px;}
+.cb-band .cb-linha{margin-bottom:0;}
 /* modal de detalhes */
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 22px;}
 .det-f .k{font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);margin-bottom:3px;}
@@ -367,6 +385,7 @@ td:last-child{white-space:nowrap;}
               </div>
               <div class="anexo-filled" style="display:none"></div>
             </div>
+            <div id="cb-preview" class="cb-box" style="display:none"></div>
           </div>
           <div class="field"><label>Notas fiscais / recibos (pode anexar vários)</label>
             <div class="anexo-box" id="box-nf" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="anexoDrop(event)">
@@ -575,7 +594,7 @@ function anexoArr(v){ if(!v) return []; if(typeof v==='string' && v.trim().start
 function anexoNome(path){ const s=String(path).split('/').pop(); return s.length>26? s.slice(0,24)+'…':s; }
 function isImgUrl(u){ return /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(u); }
 function anexoDrop(ev){ ev.preventDefault(); const box=ev.currentTarget; box.classList.remove('drag-over'); const fs=ev.dataTransfer&&ev.dataTransfer.files; if(!fs||!fs.length)return; const input=box.querySelector('input[type=file]'); try{const dt=new DataTransfer(); for(const f of fs) dt.items.add(f); input.files=dt.files;}catch(e){} input.dispatchEvent(new Event('change',{bubbles:true})); }
-function boletoSelecionado(input){ addFiles('boleto', input.files); input.value=''; }
+function boletoSelecionado(input){ const fs=[...input.files]; addFiles('boleto', input.files); input.value=''; autoLerBoleto(fs); }
 function anexoSelecionado(input){ addFiles('nf', input.files); input.value=''; }
 function addFiles(kind, fileList){
   const pend=kind==='boleto'?pendingBoletos:pendingNfs, keep=kind==='boleto'?keepBoletos:keepNfs;
@@ -616,7 +635,7 @@ function verDoc(kind,id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
   const paths=anexoArr(kind==='boleto'?d.boleto:d.nf); if(!paths.length) return;
   const rot = kind==='boleto'?'Boleto':'NF';
-  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p)}));
+  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p),linha:(kind==='boleto'?(d.codigo_barras||null):null)}));
   showViewerAt(0);
 }
 function verAnexo(url,nome,isImg){ viewerList=[{url,nome,isImg}]; showViewerAt(0); }
@@ -626,7 +645,10 @@ function showViewerAt(i){
   const it=viewerList[viewerIdx];
   $('viewer-title').textContent=it.nome + (viewerList.length>1?` (${viewerIdx+1}/${viewerList.length})`:'');
   $('viewer-download').href=it.url;
-  $('viewer-body').innerHTML = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
+  const _doc = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
+  const _band = (it.linha && cbLinhaValida(it.linha)) ? barcodeBandHTML(it.linha) : '';
+  $('viewer-body').innerHTML = _band ? `<div class="cb-view-wrap">${_band}${_doc}</div>` : _doc;
+  if(_band) desenharBarcode('cb-svg-view', it.linha);
   $('viewer-nav').style.display = viewerList.length>1 ? 'inline-flex' : 'none';
   $('viewer').classList.add('show');
 }
@@ -860,6 +882,7 @@ async function salvar(){
     pagamento: statusAtual==='PAGO'? ($('f_pagamento').value||null): null,
     conta: statusAtual==='PAGO'? ($('f_conta').value.trim()||null): null,
     forma_pagamento:$('f_forma').value, historico:$('f_historico').value.trim()||null,
+    codigo_barras: pendingCodigoBarras||null,
     lancador:currentNome
   };
 
@@ -1121,6 +1144,7 @@ function editar(id){
   setStatus(d.status||'A_PAGAR');
   $('f_pagamento').value=d.pagamento||''; $('f_conta').value=d.conta||'';
   keepBoletos=anexoArr(d.boleto); keepNfs=anexoArr(d.nf); pendingBoletos=[]; pendingNfs=[];
+  pendingCodigoBarras=d.codigo_barras||''; cbParcelas=pendingCodigoBarras?[cbParse(pendingCodigoBarras)]:[]; cbIdx=0; renderCbPreview();
   $('f_boleto').value=''; $('f_anexo').value=''; renderChips('boleto'); renderChips('nf');
   $('btnSalvar').textContent='✓ Atualizar';
   showView('novo'); window.scrollTo({top:0});
@@ -1142,9 +1166,146 @@ function limparForm(){
   if($('f_placa')) $('f_placa').disabled=false; if($('rt-soma')) $('rt-soma').textContent='Rateio: R$ 0,00';
   if($('rt-total')) $('rt-total').value=''; if($('f_valor')) $('f_valor').readOnly=false; if($('btnSalvar')) $('btnSalvar').disabled=false;
   pendingBoletos=[]; pendingNfs=[]; keepBoletos=[]; keepNfs=[];
+  cbLimpar();
   if($('f_boleto'))$('f_boleto').value=''; if($('f_anexo'))$('f_anexo').value=''; renderChips('boleto'); renderChips('nf');
   if($('parcelas-editor')){$('parcelas-editor').style.display='none'; $('parcelas-rows').innerHTML='';} if($('parc-soma'))$('parc-soma').textContent='';
   setStatus('A_PAGAR'); $('btnSalvar').textContent='✓ Salvar lançamento';
+}
+
+/* ===================== CÓDIGO DE BARRAS (BOLETO) ===================== */
+let pendingCodigoBarras='', cbParcelas=[], cbIdx=0; const _cbLibs={};
+const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+const PDFJS_WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+const JSBARCODE_URL='https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
+
+function cbDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
+function cbFmtLinha(l){ l=cbDigits(l); if(l.length!==47) return l;
+  return `${l.slice(0,5)}.${l.slice(5,10)} ${l.slice(10,15)}.${l.slice(15,21)} ${l.slice(21,26)}.${l.slice(26,32)} ${l[32]} ${l.slice(33)}`; }
+function cbLinhaParaBarcode(l){ l=cbDigits(l); if(l.length!==47) return null;
+  const campoLivre=l.slice(4,9)+l.slice(10,20)+l.slice(21,31);
+  const bc=l.slice(0,4)+l[32]+l.slice(33,47)+campoLivre;
+  return bc.length===44?bc:null; }
+function cbDV(bc43){ const p=[2,3,4,5,6,7,8,9]; let s=0,k=0;
+  for(let i=bc43.length-1;i>=0;i--){ s+=(+bc43[i])*p[k%8]; k++; }
+  let dv=11-(s%11); if(dv===0||dv>9) dv=1; return dv; }
+function cbBarcodeValido(bc){ bc=cbDigits(bc); if(bc.length!==44) return false;
+  return cbDV(bc.slice(0,4)+bc.slice(5))===(+bc[4]); }
+function cbLinhaValida(l){ l=cbDigits(l); return l.length===47 && cbBarcodeValido(cbLinhaParaBarcode(l)); }
+function cbFatorData(f){ f=parseInt(f,10); if(!f) return null;
+  const base=Date.UTC(2025,1,22); return new Date(base+(f-1000)*86400000); }
+function cbFmtData(d){ if(!d) return '—'; const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()}`; }
+function cbParse(l){ l=cbDigits(l); if(l.length!==47) return null;
+  return { linha:l, venc:cbFatorData(l.slice(33,37)), valor:(+l.slice(37,47))/100 }; }
+
+function loadScript(url){ return new Promise((res,rej)=>{ if(_cbLibs[url]) return res();
+  const s=document.createElement('script'); s.src=url;
+  s.onload=()=>{_cbLibs[url]=1;res();}; s.onerror=()=>rej(new Error('CDN indisponível: '+url));
+  document.head.appendChild(s); }); }
+
+async function pdfExtrairLinhas(file){
+  await loadScript(PDFJS_URL);
+  const lib=window.pdfjsLib; if(!lib) throw new Error('pdf.js');
+  lib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+  const buf=await file.arrayBuffer();
+  const doc=await lib.getDocument({data:buf}).promise;
+  let full='';
+  for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent();
+    full+=tc.items.map(i=>i.str).join(' ')+'\n'; }
+  const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
+  const found=[...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47);
+  return [...new Set(found)];
+}
+
+function cbEscolherParcela(parcelas){
+  const h=new Date(); const hj=Date.UTC(h.getFullYear(),h.getMonth(),h.getDate());
+  let idx=parcelas.findIndex(p=>p.venc && p.venc.getTime()>=hj);
+  if(idx<0) idx=parcelas.length-1;
+  return idx;
+}
+
+async function autoLerBoleto(files){
+  const pdf=[...files].find(f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name));
+  if(!pdf) return;
+  const box=$('cb-preview'); if(box){ box.style.display='block'; box.innerHTML='<div class="cb-load">🔍 Lendo código de barras do boleto…</div>'; }
+  try{
+    const linhas=await pdfExtrairLinhas(pdf);
+    if(!linhas.length){ cbManualUI('Não encontrei o código no PDF (talvez seja escaneado). Cole a linha digitável:'); return; }
+    cbParcelas=linhas.map(cbParse).filter(Boolean).sort((a,b)=>((a.venc&&a.venc.getTime())||0)-((b.venc&&b.venc.getTime())||0));
+    cbIdx=cbEscolherParcela(cbParcelas);
+    pendingCodigoBarras=cbParcelas[cbIdx].linha;
+    renderCbPreview();
+  }catch(e){ cbManualUI('Leitura automática indisponível (sem internet?). Cole a linha digitável:'); }
+}
+
+function cbManualUI(msg){
+  const box=$('cb-preview'); if(!box) return; box.style.display='block';
+  box.innerHTML=`<div class="cb-head">🏦 Código de barras do boleto</div>
+    <div class="cb-msg">${esc(msg||'Cole a linha digitável (47 dígitos):')}</div>
+    <input id="cb-manual" class="cb-input" inputmode="numeric" placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000" oninput="cbManualInput(this.value)">
+    <div id="cb-manual-status" class="cb-msg"></div>`;
+  if(pendingCodigoBarras){ const inp=$('cb-manual'); if(inp) inp.value=cbFmtLinha(pendingCodigoBarras); }
+}
+function cbManualInput(v){
+  const st=$('cb-manual-status');
+  if(cbLinhaValida(v)){ pendingCodigoBarras=cbDigits(v); cbParcelas=[cbParse(pendingCodigoBarras)]; cbIdx=0;
+    if(st) st.innerHTML='<span style="color:var(--sucesso)">✓ Linha válida — código gerado abaixo</span>';
+    renderCbPreview(); }
+  else { const n=cbDigits(v).length; if(st) st.textContent = n? `${n}/47 dígitos${n===47?' — dígito verificador não confere':''}` : ''; }
+}
+
+function renderCbPreview(){
+  const box=$('cb-preview'); if(!box) return;
+  if(!pendingCodigoBarras){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  const p=cbParcelas[cbIdx]||cbParse(pendingCodigoBarras);
+  let sel='';
+  if(cbParcelas.length>1){
+    sel=`<select class="cb-sel" onchange="cbPick(this.value)">`+
+      cbParcelas.map((x,i)=>`<option value="${i}" ${i===cbIdx?'selected':''}>Parcela ${i+1}/${cbParcelas.length} — venc ${cbFmtData(x.venc)} — ${money(x.valor)}</option>`).join('')+
+      `</select>`;
+  }
+  box.innerHTML=`
+    <div class="cb-head">🏦 Código de barras detectado</div>
+    ${cbParcelas.length>1?`<div class="cb-msg">Carnê com ${cbParcelas.length} parcelas — selecionei a do vencimento mais próximo. Troque se precisar:</div>${sel}`:''}
+    <div class="cb-meta">Vencimento <b>${cbFmtData(p&&p.venc)}</b> · ${money(p?p.valor:0)}</div>
+    <svg id="cb-svg-form" class="cb-svg"></svg>
+    <div class="cb-linha">${cbFmtLinha(pendingCodigoBarras)}</div>
+    <div class="cb-acts">
+      <button type="button" class="btn btn-primary btn-sm" onclick="copiarLinha('${pendingCodigoBarras}')">⧉ Copiar linha digitável</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cbManualUI('Cole/edite a linha digitável (47 dígitos):')">✎ Corrigir</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cbLimpar()">✕ Remover</button>
+    </div>`;
+  desenharBarcode('cb-svg-form', pendingCodigoBarras);
+}
+function cbPick(i){ cbIdx=+i; pendingCodigoBarras=cbParcelas[cbIdx].linha; renderCbPreview(); }
+function cbLimpar(){ pendingCodigoBarras=''; cbParcelas=[]; cbIdx=0; const b=$('cb-preview'); if(b){ b.style.display='none'; b.innerHTML=''; } }
+
+async function desenharBarcode(svgId, linha){
+  const bc=cbLinhaParaBarcode(linha); const el=document.getElementById(svgId); if(!el||!bc) return;
+  try{ await loadScript(JSBARCODE_URL);
+    window.JsBarcode(el,bc,{format:'ITF',width:2,height:80,displayValue:false,margin:0});
+  }catch(e){ el.outerHTML='<div class="cb-msg">Imagem do código indisponível offline — use “Copiar linha digitável”.</div>'; }
+}
+
+async function copiarLinha(linha){
+  const l=cbDigits(linha);
+  try{ await navigator.clipboard.writeText(l); toast('Linha digitável copiada.'); }
+  catch(e){ const t=document.createElement('textarea'); t.value=l; document.body.appendChild(t); t.select();
+    try{ document.execCommand('copy'); toast('Linha digitável copiada.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); }
+}
+
+function barcodeBandHTML(linha){
+  const bc=cbLinhaParaBarcode(linha); if(!bc) return '';
+  const p=cbParse(linha);
+  return `<div class="cb-band">
+    <div class="cb-band-top">
+      <span class="cb-band-t">🏦 Código de barras — venc ${cbFmtData(p&&p.venc)} · ${money(p?p.valor:0)}</span>
+      <button class="btn btn-primary btn-sm" onclick="copiarLinha('${cbDigits(linha)}')">⧉ Copiar linha digitável</button>
+    </div>
+    <svg id="cb-svg-view" class="cb-svg"></svg>
+    <div class="cb-linha">${cbFmtLinha(linha)}</div>
+  </div>`;
 }
 
 /* ===================== NAVEGAÇÃO ===================== */
