@@ -187,6 +187,8 @@ td:last-child{white-space:nowrap;}
 .viewer-bar a,.viewer-bar button{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 14px;font-size:13px;text-decoration:none;cursor:pointer;}
 .viewer-bar a:hover,.viewer-bar button:hover{background:rgba(255,255,255,.26);}
 .viewer-body{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;overflow:auto;}
+.viewer-body{position:relative;}
+.cb-reading{position:absolute;top:10px;left:16px;z-index:5;background:rgba(255,255,255,.96);color:var(--verde);font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;padding:7px 13px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.2);}
 .viewer-body iframe{background:#fff;width:min(940px,100%);height:100%;border:none;border-radius:8px;}
 .viewer-body img{background:#fff;max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
 .cb-box{margin-top:12px;border:1px solid var(--creme-dark);background:var(--branco);border-radius:12px;padding:14px 16px;}
@@ -626,19 +628,19 @@ function renderChips(kind){
   filled.innerHTML=items.join('')+ (items.length<5?`<div class="anexo-add" onclick="$('${inputId}').click()">+ adicionar outro</div>`:'');
 }
 function verPending(kind,which,i){
-  if(which==='keep'){ const path=(kind==='boleto'?keepBoletos:keepNfs)[i]; verAnexo(publicUrl(path),anexoNome(path),isImgUrl(path)); }
-  else { const f=(kind==='boleto'?pendingBoletos:pendingNfs)[i]; verAnexo(URL.createObjectURL(f),f.name,/^image\//.test(f.type)); }
+  if(which==='keep'){ const path=(kind==='boleto'?keepBoletos:keepNfs)[i]; verAnexo(publicUrl(path),anexoNome(path),isImgUrl(path),kind==='boleto'); }
+  else { const f=(kind==='boleto'?pendingBoletos:pendingNfs)[i]; verAnexo(URL.createObjectURL(f),f.name,/^image\//.test(f.type),kind==='boleto'); }
 }
-function verAnexoPath(path,nome){ verAnexo(publicUrl(path),nome,isImgUrl(path)); }
+function verAnexoPath(path,nome,isBoleto,linha){ verAnexo(publicUrl(path),nome,isImgUrl(path),isBoleto,linha); }
 let viewerList=[], viewerIdx=0;
 function verDoc(kind,id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
   const paths=anexoArr(kind==='boleto'?d.boleto:d.nf); if(!paths.length) return;
   const rot = kind==='boleto'?'Boleto':'NF';
-  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p),linha:(kind==='boleto'?(d.codigo_barras||null):null)}));
+  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p),isBoleto:(kind==='boleto'),linha:(kind==='boleto'?(d.codigo_barras||null):null)}));
   showViewerAt(0);
 }
-function verAnexo(url,nome,isImg){ viewerList=[{url,nome,isImg}]; showViewerAt(0); }
+function verAnexo(url,nome,isImg,isBoleto,linha){ viewerList=[{url,nome,isImg,isBoleto:!!isBoleto,linha:linha||null}]; showViewerAt(0); }
 function showViewerAt(i){
   if(!viewerList.length) return;
   viewerIdx=(i+viewerList.length)%viewerList.length;
@@ -649,6 +651,7 @@ function showViewerAt(i){
   const _band = (it.linha && cbLinhaValida(it.linha)) ? barcodeBandHTML(it.linha) : '';
   $('viewer-body').innerHTML = _band ? `<div class="cb-view-wrap">${_band}${_doc}</div>` : _doc;
   if(_band) desenharBarcode('cb-svg-view', it.linha);
+  else if(it.isBoleto) viewerAutoLer(it, viewerIdx);
   $('viewer-nav').style.display = viewerList.length>1 ? 'inline-flex' : 'none';
   $('viewer').classList.add('show');
 }
@@ -1118,7 +1121,7 @@ function openDetalhe(id){
   ].join('');
   const bol=anexoArr(d.boleto), nf=anexoArr(d.nf);
   const btns=[
-    ...bol.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','Boleto ${i+1}')">🏦 Ver Boleto ${bol.length>1?i+1:''}</button>`),
+    ...bol.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','Boleto ${i+1}',true,'${d.codigo_barras||''}')">🏦 Ver Boleto ${bol.length>1?i+1:''}</button>`),
     ...nf.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','NF ${i+1}')">📎 Ver NF ${nf.length>1?i+1:''}</button>`)
   ];
   $('det-anexos').innerHTML = btns.length? btns.join('') : '<span style="color:var(--cinza);font-size:13px">Sem anexos.</span>';
@@ -1174,67 +1177,120 @@ function limparForm(){
 
 /* ===================== CÓDIGO DE BARRAS (BOLETO) ===================== */
 let pendingCodigoBarras='', cbParcelas=[], cbIdx=0; const _cbLibs={};
-const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
-const PDFJS_WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-const JSBARCODE_URL='https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
+const CDN_PDF=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'];
+const CDN_PDFW=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'];
+const CDN_ZX=['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://cdnjs.cloudflare.com/ajax/libs/zxing-library/0.21.3/umd/index.min.js'];
+const CDN_BAR=['https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js','https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js'];
 
 function cbDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
+function cbMod10(num){ let sum=0,w=2; for(let i=num.length-1;i>=0;i--){ let n=(+num[i])*w; if(n>9)n=(n-10)+1; sum+=n; w=w===2?1:2; } return (10-(sum%10))%10; }
 function cbFmtLinha(l){ l=cbDigits(l); if(l.length!==47) return l;
   return `${l.slice(0,5)}.${l.slice(5,10)} ${l.slice(10,15)}.${l.slice(15,21)} ${l.slice(21,26)}.${l.slice(26,32)} ${l[32]} ${l.slice(33)}`; }
 function cbLinhaParaBarcode(l){ l=cbDigits(l); if(l.length!==47) return null;
-  const campoLivre=l.slice(4,9)+l.slice(10,20)+l.slice(21,31);
-  const bc=l.slice(0,4)+l[32]+l.slice(33,47)+campoLivre;
-  return bc.length===44?bc:null; }
-function cbDV(bc43){ const p=[2,3,4,5,6,7,8,9]; let s=0,k=0;
-  for(let i=bc43.length-1;i>=0;i--){ s+=(+bc43[i])*p[k%8]; k++; }
-  let dv=11-(s%11); if(dv===0||dv>9) dv=1; return dv; }
-function cbBarcodeValido(bc){ bc=cbDigits(bc); if(bc.length!==44) return false;
-  return cbDV(bc.slice(0,4)+bc.slice(5))===(+bc[4]); }
+  const livre=l.slice(4,9)+l.slice(10,20)+l.slice(21,31);
+  const bc=l.slice(0,4)+l[32]+l.slice(33,47)+livre; return bc.length===44?bc:null; }
+function cbBarcodeParaLinha(bc){ bc=cbDigits(bc); if(bc.length!==44) return null;
+  const banco=bc.slice(0,4), dvGeral=bc[4], fatorValor=bc.slice(5,19), livre=bc.slice(19,44);
+  const c1=banco+livre.slice(0,5), c2=livre.slice(5,15), c3=livre.slice(15,25);
+  return (c1+cbMod10(c1))+(c2+cbMod10(c2))+(c3+cbMod10(c3))+dvGeral+fatorValor; }
+function cbDV(bc43){ const p=[2,3,4,5,6,7,8,9]; let s=0,k=0; for(let i=bc43.length-1;i>=0;i--){ s+=(+bc43[i])*p[k%8]; k++; } let dv=11-(s%11); if(dv===0||dv>9) dv=1; return dv; }
+function cbBarcodeValido(bc){ bc=cbDigits(bc); if(bc.length!==44) return false; return cbDV(bc.slice(0,4)+bc.slice(5))===(+bc[4]); }
 function cbLinhaValida(l){ l=cbDigits(l); return l.length===47 && cbBarcodeValido(cbLinhaParaBarcode(l)); }
-function cbFatorData(f){ f=parseInt(f,10); if(!f) return null;
-  const base=Date.UTC(2025,1,22); return new Date(base+(f-1000)*86400000); }
-function cbFmtData(d){ if(!d) return '—'; const p=n=>String(n).padStart(2,'0');
-  return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()}`; }
-function cbParse(l){ l=cbDigits(l); if(l.length!==47) return null;
-  return { linha:l, venc:cbFatorData(l.slice(33,37)), valor:(+l.slice(37,47))/100 }; }
+function cbFatorData(f){ f=parseInt(f,10); if(!f) return null; const base=Date.UTC(2025,1,22); return new Date(base+(f-1000)*86400000); }
+function cbFmtData(d){ if(!d) return '—'; const p=n=>String(n).padStart(2,'0'); return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()}`; }
+function cbParse(l){ l=cbDigits(l); if(l.length!==47) return null; return { linha:l, venc:cbFatorData(l.slice(33,37)), valor:(+l.slice(37,47))/100 }; }
 
 function loadScript(url){ return new Promise((res,rej)=>{ if(_cbLibs[url]) return res();
-  const s=document.createElement('script'); s.src=url;
-  s.onload=()=>{_cbLibs[url]=1;res();}; s.onerror=()=>rej(new Error('CDN indisponível: '+url));
-  document.head.appendChild(s); }); }
+  const s=document.createElement('script'); s.src=url; s.onload=()=>{_cbLibs[url]=1;res();}; s.onerror=()=>rej(new Error('CDN '+url)); document.head.appendChild(s); }); }
+async function loadFirst(urls){ let err; for(const u of urls){ try{ await loadScript(u); return u; }catch(e){ err=e; } } throw err||new Error('CDN'); }
+async function ensurePdfjs(){ if(window.pdfjsLib) return window.pdfjsLib;
+  const u=await loadFirst(CDN_PDF); const w=u.includes('cdnjs')?CDN_PDFW[1]:CDN_PDFW[0];
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc=w; return window.pdfjsLib; }
+async function ensureZxing(){ if(window.ZXing) return window.ZXing; await loadFirst(CDN_ZX); return window.ZXing; }
+async function ensureBar(){ if(window.JsBarcode) return; await loadFirst(CDN_BAR); }
 
 async function pdfExtrairLinhas(file){
-  await loadScript(PDFJS_URL);
-  const lib=window.pdfjsLib; if(!lib) throw new Error('pdf.js');
-  lib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
-  const buf=await file.arrayBuffer();
-  const doc=await lib.getDocument({data:buf}).promise;
-  let full='';
-  for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent();
-    full+=tc.items.map(i=>i.str).join(' ')+'\n'; }
+  const lib=await ensurePdfjs(); const buf=await file.arrayBuffer();
+  const doc=await lib.getDocument({data:buf}).promise; let full='';
+  for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent(); full+=tc.items.map(i=>i.str).join(' ')+'\n'; }
   const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
-  const found=[...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47);
-  return [...new Set(found)];
+  return [...new Set([...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47))];
+}
+
+function zxDecodeCanvas(canvas){
+  const ZXing=window.ZXing; if(!ZXing) return [];
+  const w=canvas.width,h=canvas.height; const data=canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum=new Uint8ClampedArray(w*h);
+  for(let i=0;i<w*h;i++){ lum[i]=(data[i*4]*0.299+data[i*4+1]*0.587+data[i*4+2]*0.114)|0; }
+  const src=new ZXing.RGBLuminanceSource(lum,w,h);
+  const hints=new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  const achados=new Set(); const N=110;
+  for(const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]){
+    let bmp; try{ bmp=new ZXing.BinaryBitmap(new Bin(src)); }catch(e){ continue; }
+    const reader=new ZXing.ITFReader();
+    for(let k=0;k<N;k++){ const y=Math.floor(h*(k+0.5)/N);
+      try{ const row=bmp.getBlackRow(y,null); const res=reader.decodeRow(y,row,hints); const txt=cbDigits(res.getText());
+        if(txt.length===44){ const linha=cbBarcodeParaLinha(txt); if(linha && cbLinhaValida(linha)) achados.add(linha); }
+      }catch(e){}
+    }
+    if(achados.size) break;
+  }
+  return [...achados];
+}
+
+async function pdfDecodeImagem(file){
+  const lib=await ensurePdfjs(); await ensureZxing();
+  const buf=await file.arrayBuffer(); const doc=await lib.getDocument({data:buf}).promise; const out=[];
+  for(let p=1;p<=doc.numPages;p++){ const page=await doc.getPage(p);
+    const base=page.getViewport({scale:1}); const scale=Math.min(5, Math.max(3, 2400/base.width));
+    const vp=page.getViewport({scale});
+    const canvas=document.createElement('canvas'); canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+    zxDecodeCanvas(canvas).forEach(l=>out.push(l)); }
+  return [...new Set(out)];
+}
+
+async function imagemDecode(file){
+  await ensureZxing(); const url=URL.createObjectURL(file);
+  try{ const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+    let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; const max=2600;
+    if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    let r=zxDecodeCanvas(canvas);
+    if(!r.length){ // 2ª tentativa: recorta a metade inferior (onde costuma estar o código) ampliada
+      const ch=Math.floor(h*0.55); const c2=document.createElement('canvas'); c2.width=w; c2.height=ch;
+      c2.getContext('2d').drawImage(canvas,0,h-ch,w,ch,0,0,w,ch); r=zxDecodeCanvas(c2); }
+    return r;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function ehPdf(f){ return /pdf/i.test(f.type||'')||/\.pdf($|\?)/i.test(f.name||''); }
+function ehImagem(f){ return /^image\//i.test(f.type||'')||/\.(png|jpe?g|webp|gif|bmp|heic|heif)($|\?)/i.test(f.name||''); }
+
+async function lerCodigosDeArquivo(file){
+  if(ehPdf(file)){
+    try{ const ls=await pdfExtrairLinhas(file); if(ls.length) return ls; }catch(e){}
+    try{ const ls=await pdfDecodeImagem(file); if(ls.length) return ls; }catch(e){}
+    return [];
+  }
+  if(ehImagem(file)){ try{ return await imagemDecode(file); }catch(e){ return []; } }
+  return [];
 }
 
 function cbEscolherParcela(parcelas){
   const h=new Date(); const hj=Date.UTC(h.getFullYear(),h.getMonth(),h.getDate());
-  let idx=parcelas.findIndex(p=>p.venc && p.venc.getTime()>=hj);
-  if(idx<0) idx=parcelas.length-1;
-  return idx;
+  let idx=parcelas.findIndex(p=>p.venc && p.venc.getTime()>=hj); if(idx<0) idx=parcelas.length-1; return idx;
 }
+function cbOrdena(linhas){ return linhas.map(cbParse).filter(Boolean).sort((a,b)=>((a.venc&&a.venc.getTime())||0)-((b.venc&&b.venc.getTime())||0)); }
 
 async function autoLerBoleto(files){
-  const pdf=[...files].find(f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name));
-  if(!pdf) return;
+  const f=[...files].find(x=>ehPdf(x)||ehImagem(x)); if(!f) return;
   const box=$('cb-preview'); if(box){ box.style.display='block'; box.innerHTML='<div class="cb-load">🔍 Lendo código de barras do boleto…</div>'; }
   try{
-    const linhas=await pdfExtrairLinhas(pdf);
-    if(!linhas.length){ cbManualUI('Não encontrei o código no PDF (talvez seja escaneado). Cole a linha digitável:'); return; }
-    cbParcelas=linhas.map(cbParse).filter(Boolean).sort((a,b)=>((a.venc&&a.venc.getTime())||0)-((b.venc&&b.venc.getTime())||0));
-    cbIdx=cbEscolherParcela(cbParcelas);
-    pendingCodigoBarras=cbParcelas[cbIdx].linha;
-    renderCbPreview();
+    const linhas=await lerCodigosDeArquivo(f);
+    if(!linhas.length){ cbManualUI('Não consegui ler o código automaticamente (boleto ruim?). Cole a linha digitável:'); return; }
+    cbParcelas=cbOrdena(linhas); cbIdx=cbEscolherParcela(cbParcelas); pendingCodigoBarras=cbParcelas[cbIdx].linha; renderCbPreview();
   }catch(e){ cbManualUI('Leitura automática indisponível (sem internet?). Cole a linha digitável:'); }
 }
 
@@ -1249,8 +1305,7 @@ function cbManualUI(msg){
 function cbManualInput(v){
   const st=$('cb-manual-status');
   if(cbLinhaValida(v)){ pendingCodigoBarras=cbDigits(v); cbParcelas=[cbParse(pendingCodigoBarras)]; cbIdx=0;
-    if(st) st.innerHTML='<span style="color:var(--sucesso)">✓ Linha válida — código gerado abaixo</span>';
-    renderCbPreview(); }
+    if(st) st.innerHTML='<span style="color:var(--sucesso)">✓ Linha válida — código gerado abaixo</span>'; renderCbPreview(); }
   else { const n=cbDigits(v).length; if(st) st.textContent = n? `${n}/47 dígitos${n===47?' — dígito verificador não confere':''}` : ''; }
 }
 
@@ -1261,9 +1316,7 @@ function renderCbPreview(){
   const p=cbParcelas[cbIdx]||cbParse(pendingCodigoBarras);
   let sel='';
   if(cbParcelas.length>1){
-    sel=`<select class="cb-sel" onchange="cbPick(this.value)">`+
-      cbParcelas.map((x,i)=>`<option value="${i}" ${i===cbIdx?'selected':''}>Parcela ${i+1}/${cbParcelas.length} — venc ${cbFmtData(x.venc)} — ${money(x.valor)}</option>`).join('')+
-      `</select>`;
+    sel=`<select class="cb-sel" onchange="cbPick(this.value)">`+cbParcelas.map((x,i)=>`<option value="${i}" ${i===cbIdx?'selected':''}>Parcela ${i+1}/${cbParcelas.length} — venc ${cbFmtData(x.venc)} — ${money(x.valor)}</option>`).join('')+`</select>`;
   }
   box.innerHTML=`
     <div class="cb-head">🏦 Código de barras detectado</div>
@@ -1283,16 +1336,14 @@ function cbLimpar(){ pendingCodigoBarras=''; cbParcelas=[]; cbIdx=0; const b=$('
 
 async function desenharBarcode(svgId, linha){
   const bc=cbLinhaParaBarcode(linha); const el=document.getElementById(svgId); if(!el||!bc) return;
-  try{ await loadScript(JSBARCODE_URL);
-    window.JsBarcode(el,bc,{format:'ITF',width:2,height:80,displayValue:false,margin:0});
-  }catch(e){ el.outerHTML='<div class="cb-msg">Imagem do código indisponível offline — use “Copiar linha digitável”.</div>'; }
+  try{ await ensureBar(); window.JsBarcode(el,bc,{format:'ITF',width:2,height:80,displayValue:false,margin:0}); }
+  catch(e){ el.outerHTML='<div class="cb-msg">Imagem do código indisponível offline — use “Copiar linha digitável”.</div>'; }
 }
 
 async function copiarLinha(linha){
   const l=cbDigits(linha);
   try{ await navigator.clipboard.writeText(l); toast('Linha digitável copiada.'); }
-  catch(e){ const t=document.createElement('textarea'); t.value=l; document.body.appendChild(t); t.select();
-    try{ document.execCommand('copy'); toast('Linha digitável copiada.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); }
+  catch(e){ const t=document.createElement('textarea'); t.value=l; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast('Linha digitável copiada.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); }
 }
 
 function barcodeBandHTML(linha){
@@ -1308,6 +1359,36 @@ function barcodeBandHTML(linha){
   </div>`;
 }
 
+async function viewerAutoLer(it, idx){
+  const bodyEl=$('viewer-body'); if(!bodyEl) return;
+  const chip=document.createElement('div'); chip.className='cb-reading'; chip.textContent='🔍 lendo código do boleto…'; bodyEl.appendChild(chip);
+  const done=()=>{ if(chip&&chip.parentNode) chip.parentNode.removeChild(chip); };
+  try{
+    let linhas=[];
+    try{
+      const resp=await fetch(it.url);
+      if(resp.ok){ const blob=await resp.blob();
+        const isPdf=/pdf/i.test(blob.type)||/\.pdf($|\?)/i.test(it.url);
+        const file=new File([blob],(it.nome||'boleto').replace(/\s+/g,'_')+(isPdf?'.pdf':'.jpg'),{type:blob.type||(isPdf?'application/pdf':'image/jpeg')});
+        linhas=await lerCodigosDeArquivo(file);
+      }
+    }catch(e){}
+    if(!linhas.length && !it.isImg && /\.pdf($|\?)/i.test(it.url)){
+      try{ const lib=await ensurePdfjs(); const doc=await lib.getDocument({url:it.url}).promise; let full='';
+        for(let pg=1;pg<=doc.numPages;pg++){ const page=await doc.getPage(pg); const tc=await page.getTextContent(); full+=tc.items.map(x=>x.str).join(' ')+'\n'; }
+        const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
+        linhas=[...new Set([...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47))];
+      }catch(e){}
+    }
+    if(!linhas.length){ done(); return; }
+    const parc=cbOrdena(linhas); const pick=parc[cbEscolherParcela(parc)]; if(!pick){ done(); return; }
+    if(viewerIdx!==idx || !$('viewer').classList.contains('show')){ done(); return; }
+    it.linha=pick.linha;
+    const doc = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
+    bodyEl.innerHTML=`<div class="cb-view-wrap">${barcodeBandHTML(pick.linha)}${doc}</div>`;
+    desenharBarcode('cb-svg-view', pick.linha);
+  }catch(e){ done(); }
+}
 /* ===================== NAVEGAÇÃO ===================== */
 function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
