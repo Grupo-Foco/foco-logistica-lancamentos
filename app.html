@@ -230,6 +230,14 @@ td:last-child{white-space:nowrap;}
   .grid,.grid.two,.grid.four{grid-template-columns:1fr;}
   .wrap{margin:22px auto;}
 }
+.pix-box{border-top:1px solid var(--creme-dark);margin-top:18px;padding-top:16px;}
+.pix-head{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--verde);font-weight:700;margin-bottom:8px;}
+.pix-msg{font-size:12px;color:var(--cinza);margin:4px 0 10px;}
+.pix-wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
+.pix-qr{width:200px;height:200px;flex:0 0 auto;background:#fff;border:1px solid var(--creme-dark);border-radius:10px;padding:8px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;}
+.pix-qr svg{width:100%;height:100%;display:block;}
+.pix-side{flex:1;min-width:220px;}
+.pix-cc{font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;color:var(--texto);word-break:break-all;background:var(--creme);border:1px solid var(--creme-dark);border-radius:8px;padding:10px;margin-bottom:10px;max-height:130px;overflow:auto;}
 </style>
 </head>
 <body>
@@ -482,6 +490,7 @@ td:last-child{white-space:nowrap;}
         <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cinza);margin-bottom:8px">Anexos</div>
         <div class="det-anexos" id="det-anexos"></div>
       </div>
+      <div id="det-pix" class="pix-box" style="display:none"></div>
     </div>
     <div style="padding:16px 22px;display:flex;justify-content:flex-end;gap:10px;background:var(--creme);flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="fecharDetalhe()">Fechar</button>
@@ -1127,6 +1136,7 @@ function openDetalhe(id){
   $('det-anexos').innerHTML = btns.length? btns.join('') : '<span style="color:var(--cinza);font-size:13px">Sem anexos.</span>';
   $('det-baixar').style.display = d.status==='A_PAGAR'?'':'none';
   $('det-excluir').style.display = hasPerm('excluir')?'':'none';
+  renderPix(d);
   $('detOverlay').style.display='flex';
 }
 function fecharDetalhe(){ $('detOverlay').style.display='none'; detalheId=null; }
@@ -1465,6 +1475,93 @@ function viewerManualInput(v){
     desenharBarcode('cb-svg-view', l);
   } else { const n=cbDigits(v).length; if(st) st.textContent=n?`${n}/47 dígitos`:''; }
 }
+/* ===================== PIX (QR + COPIA E COLA) ===================== */
+const CDN_QR=['https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js','https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js'];
+async function ensureQR(){ if(window.QRCode) return; await loadFirst(CDN_QR); }
+async function copiarTexto(txt,msg){ try{ await navigator.clipboard.writeText(txt); toast(msg||'Copiado.'); }
+  catch(e){ const t=document.createElement('textarea'); t.value=txt; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast(msg||'Copiado.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); } }
+
+function pixCrc16(str){ let crc=0xFFFF;
+  for(let i=0;i<str.length;i++){ crc^=(str.charCodeAt(i)&0xFF)<<8;
+    for(let j=0;j<8;j++){ crc=(crc&0x8000)?((crc<<1)^0x1021):(crc<<1); crc&=0xFFFF; } }
+  return crc.toString(16).toUpperCase().padStart(4,'0'); }
+function pixTlv(id,v){ return id+String(v.length).padStart(2,'0')+v; }
+function pixAscii(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'').trim(); }
+function pixValidaCPF(c){ c=String(c||'').replace(/\D/g,''); if(c.length!==11||/^(\d)\1{10}$/.test(c)) return false;
+  let s=0; for(let i=0;i<9;i++) s+=+c[i]*(10-i); let d=(s*10)%11; if(d===10)d=0; if(d!==+c[9]) return false;
+  s=0; for(let i=0;i<10;i++) s+=+c[i]*(11-i); d=(s*10)%11; if(d===10)d=0; return d===+c[10]; }
+function pixTipoChave(chave){ chave=String(chave||'').trim();
+  if(chave.includes('@')) return {tipo:'E-mail', valor:chave.toLowerCase()};
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chave)) return {tipo:'Aleatória', valor:chave.toLowerCase()};
+  const d=chave.replace(/\D/g,'');
+  if(chave.startsWith('+')) return {tipo:'Telefone', valor:'+'+d};
+  if(d.length===14) return {tipo:'CNPJ', valor:d};
+  if(d.length===11) return pixValidaCPF(d)? {tipo:'CPF', valor:d} : {tipo:'Telefone', valor:'+55'+d};
+  if(d.length===10) return {tipo:'Telefone', valor:'+55'+d};
+  return {tipo:'?', valor:chave}; }
+function pixBRCode({chave, valor, nome, cidade, txid}){
+  const nom=(pixAscii(nome).toUpperCase().slice(0,25))||'RECEBEDOR';
+  const cid=(pixAscii(cidade).toUpperCase().slice(0,15))||'BRASIL';
+  const tx=(txid&&pixAscii(txid).replace(/[^A-Za-z0-9]/g,'').slice(0,25))||'***';
+  const mai=pixTlv('26', pixTlv('00','br.gov.bcb.pix')+pixTlv('01',chave));
+  let p=pixTlv('00','01')+mai+pixTlv('52','0000')+pixTlv('53','986');
+  if(valor&&+valor>0) p+=pixTlv('54',(+valor).toFixed(2));
+  p+=pixTlv('58','BR')+pixTlv('59',nom)+pixTlv('60',cid)+pixTlv('62',pixTlv('05',tx))+'6304';
+  return p+pixCrc16(p); }
+
+let pixState={chave:'',tipo:'',valor:0,nome:'',brcode:''};
+function renderPix(d){
+  const box=$('det-pix'); if(!box) return;
+  const forma=(d.forma_pagamento||'').toUpperCase();
+  if(forma!=='PIX' || !d.chave_pix){ box.style.display='none'; box.innerHTML=''; return; }
+  const det=pixTipoChave(d.chave_pix);
+  pixState={chave:det.valor, tipo:det.tipo, valor:+d.valor||0, nome:d.fornecedor||'RECEBEDOR', brcode:''};
+  pixMontar();
+}
+function pixMontar(){
+  const box=$('det-pix'); if(!box) return; box.style.display='block';
+  const brcode=pixBRCode({chave:pixState.chave, valor:pixState.valor, nome:pixState.nome, cidade:'BRASIL', txid:''});
+  pixState.brcode=brcode;
+  box.innerHTML=`
+    <div class="pix-head">⚡ Pagar com Pix — escaneie o QR no app do banco</div>
+    <div class="pix-msg">Chave (${esc(pixState.tipo)}): <b>${esc(pixState.chave)}</b>${pixState.valor?` · valor ${money(pixState.valor)}`:''}</div>
+    <div class="pix-wrap">
+      <div id="pix-qr" class="pix-qr"></div>
+      <div class="pix-side">
+        <div class="pix-cc" id="pix-cc">${esc(brcode)}</div>
+        <div class="cb-acts">
+          <button type="button" class="btn btn-primary btn-sm" onclick="pixCopiar()">⧉ Copiar Pix copia e cola</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="pixCorrigir()">✎ Chave errada?</button>
+        </div>
+      </div>
+    </div>`;
+  pixDesenharQR(brcode);
+}
+async function pixDesenharQR(texto){
+  const el=$('pix-qr'); if(!el) return; el.innerHTML='';
+  try{ await ensureQR();
+    const svg=await window.QRCode.toString(texto,{type:'svg',margin:1,width:200,errorCorrectionLevel:'M'});
+    el.innerHTML=svg;
+  }catch(e){ el.innerHTML='<div class="pix-msg">QR indisponível offline — use “Copiar”.</div>'; }
+}
+function pixCopiar(){ copiarTexto(pixState.brcode, 'Pix copia e cola copiado.'); }
+function pixCorrigir(){
+  const box=$('det-pix'); if(!box) return;
+  box.innerHTML=`<div class="pix-head">⚡ Ajustar chave Pix</div>
+    <div class="pix-msg">Tipo detectado: <b>${esc(pixState.tipo)}</b>. Se estiver errado, escolha o tipo e confirme:</div>
+    <select id="pix-tipo" class="cb-sel"><option>CPF</option><option>CNPJ</option><option>Telefone</option><option>E-mail</option><option>Aleatória</option></select>
+    <input id="pix-chave" class="cb-input" value="${esc(pixState.chave)}" placeholder="chave Pix">
+    <div class="cb-acts" style="margin-top:10px"><button type="button" class="btn btn-primary btn-sm" onclick="pixAplicarManual()">Gerar QR</button></div>`;
+  const sel=$('pix-tipo'); if(sel) sel.value=pixState.tipo;
+}
+function pixAplicarManual(){
+  const tipo=$('pix-tipo').value; let chave=($('pix-chave').value||'').trim();
+  if(tipo==='CPF'||tipo==='CNPJ') chave=chave.replace(/\D/g,'');
+  else if(tipo==='Telefone'){ const d=chave.replace(/\D/g,''); chave=chave.startsWith('+')?('+'+d):('+55'+d); }
+  else if(tipo==='E-mail') chave=chave.toLowerCase();
+  pixState.chave=chave; pixState.tipo=tipo; pixMontar();
+}
+
 /* ===================== NAVEGAÇÃO ===================== */
 function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
