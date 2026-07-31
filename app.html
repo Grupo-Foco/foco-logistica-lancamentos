@@ -412,7 +412,7 @@ td:last-child{white-space:nowrap;}
 
 <!-- ===================== PAINEL ===================== -->
 <div class="view" id="view-painel">
-  <div class="wrap" style="max-width:1240px">
+  <div class="wrap" style="max-width:min(1800px,96vw)">
     <div class="page-h"><h1>Painel de despesas</h1><p id="painel-sub">—</p></div>
 
     <div class="kpis" id="kpis"></div>
@@ -1230,6 +1230,22 @@ function extrairLinhasDeTexto(txt){
 }
 async function pdfExtrairLinhas(file){ return extrairLinhasDeTexto(await pdfTextoCompleto(file)); }
 
+async function pdfTextoDeDoc(doc){ let full='';
+  for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent(); full+=tc.items.map(i=>i.str).join(' ')+'\n'; }
+  return full; }
+async function pdfDecodeImagemDeDoc(doc){ await ensureZxing(); const out=[]; const alvos=[3300,4600];
+  for(let p=1;p<=doc.numPages;p++){ const page=await doc.getPage(p); const b1=page.getViewport({scale:1}); let achou=[];
+    for(const alvo of alvos){ const scale=Math.min(8,Math.max(4,alvo/b1.width)); const vp=page.getViewport({scale});
+      const canvas=document.createElement('canvas'); canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
+      await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+      achou=zxDecodeCanvas(canvas); canvas.width=canvas.height=0; if(achou.length) break; }
+    achou.forEach(l=>out.push(l)); }
+  return [...new Set(out)]; }
+async function lerCodigosDeDoc(doc){
+  const ls=extrairLinhasDeTexto(await pdfTextoDeDoc(doc)); if(ls.length) return ls;
+  try{ return await pdfDecodeImagemDeDoc(doc); }catch(e){ return []; } }
+async function lerCodigosDeUrlPdf(url){ const lib=await ensurePdfjs(); const doc=await lib.getDocument({url}).promise; return lerCodigosDeDoc(doc); }
+
 function canvasToLum(canvas){
   const w=canvas.width,h=canvas.height; const data=canvas.getContext('2d').getImageData(0,0,w,h).data;
   const lum=new Uint8ClampedArray(w*h);
@@ -1277,13 +1293,19 @@ function zxDecodeCanvas(srcCanvas){
 async function pdfDecodeImagem(file){
   const lib=await ensurePdfjs(); await ensureZxing();
   const buf=await file.arrayBuffer(); const doc=await lib.getDocument({data:buf}).promise; const out=[];
+  const alvos=[3300, 4600]; // ~400 dpi (rápido) e ~560 dpi (barras finas, ex.: Banco do Brasil)
   for(let p=1;p<=doc.numPages;p++){ const page=await doc.getPage(p);
-    const base=page.getViewport({scale:1}); const scale=Math.min(6, Math.max(4.5, 3300/base.width));
-    const vp=page.getViewport({scale});
-    const canvas=document.createElement('canvas'); canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
-    await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-    zxDecodeCanvas(canvas).forEach(l=>out.push(l));
-    canvas.width=canvas.height=0;
+    const b1=page.getViewport({scale:1}); let achou=[];
+    for(const alvo of alvos){
+      const scale=Math.min(8, Math.max(4, alvo/b1.width));
+      const vp=page.getViewport({scale});
+      const canvas=document.createElement('canvas'); canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
+      await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+      achou=zxDecodeCanvas(canvas);
+      canvas.width=canvas.height=0;
+      if(achou.length) break;
+    }
+    achou.forEach(l=>out.push(l));
   }
   return [...new Set(out)];
 }
@@ -1291,7 +1313,7 @@ async function pdfDecodeImagem(file){
 async function imagemDecode(file){
   await ensureZxing(); const url=URL.createObjectURL(file);
   try{ const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
-    let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; const max=3200;
+    let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; const max=3600;
     if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
     const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
     const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high'; ctx.drawImage(img,0,0,w,h);
@@ -1408,13 +1430,9 @@ async function viewerAutoLer(it, idx){
       }
     }catch(e){}
     if(!linhas.length && !it.isImg && /\.pdf($|\?)/i.test(it.url)){
-      try{ const lib=await ensurePdfjs(); const doc=await lib.getDocument({url:it.url}).promise; let full='';
-        for(let pg=1;pg<=doc.numPages;pg++){ const page=await doc.getPage(pg); const tc=await page.getTextContent(); full+=tc.items.map(x=>x.str).join(' ')+'\n'; }
-        const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
-        linhas=[...new Set([...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47))];
-      }catch(e){}
+      try{ linhas=await lerCodigosDeUrlPdf(it.url); }catch(e){}
     }
-    if(!linhas.length){ done(); return; }
+    if(!linhas.length){ done(); viewerManual(it, idx); return; }
     const parc=cbOrdena(linhas); const pick=parc[cbEscolherParcela(parc)]; if(!pick){ done(); return; }
     if(viewerIdx!==idx || !$('viewer').classList.contains('show')){ done(); return; }
     it.linha=pick.linha;
@@ -1422,6 +1440,30 @@ async function viewerAutoLer(it, idx){
     bodyEl.innerHTML=`<div class="cb-view-wrap">${barcodeBandHTML(pick.linha)}${doc}</div>`;
     desenharBarcode('cb-svg-view', pick.linha);
   }catch(e){ done(); }
+}
+function viewerManual(it, idx){
+  if(viewerIdx!==idx || !$('viewer').classList.contains('show')) return;
+  const bodyEl=$('viewer-body'); if(!bodyEl) return;
+  const _doc = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
+  bodyEl.innerHTML=`<div class="cb-view-wrap">
+    <div class="cb-band">
+      <div class="cb-band-top"><span class="cb-band-t">🏦 Não consegui ler o código automaticamente — cole a linha digitável:</span></div>
+      <input id="cb-view-manual" class="cb-input" inputmode="numeric" placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000" oninput="viewerManualInput(this.value)">
+      <div id="cb-view-manual-status" class="cb-msg"></div>
+      <svg id="cb-svg-view" class="cb-svg" style="display:none"></svg>
+      <div class="cb-linha" id="cb-view-linha" style="display:none"></div>
+      <div id="cb-view-acts" class="cb-acts"></div>
+    </div>${_doc}</div>`;
+}
+function viewerManualInput(v){
+  const st=$('cb-view-manual-status');
+  if(cbLinhaValida(v)){ const l=cbDigits(v);
+    if(st) st.innerHTML='<span style="color:var(--sucesso)">✓ Linha válida</span>';
+    const svg=$('cb-svg-view'); if(svg) svg.style.display='block';
+    const ln=$('cb-view-linha'); if(ln){ ln.style.display='block'; ln.textContent=cbFmtLinha(l); }
+    const acts=$('cb-view-acts'); if(acts) acts.innerHTML=`<button class="btn btn-primary btn-sm" onclick="copiarLinha('${l}')">⧉ Copiar linha digitável</button>`;
+    desenharBarcode('cb-svg-view', l);
+  } else { const n=cbDigits(v).length; if(st) st.textContent=n?`${n}/47 dígitos`:''; }
 }
 /* ===================== NAVEGAÇÃO ===================== */
 function showView(v){
