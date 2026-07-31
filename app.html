@@ -1476,8 +1476,8 @@ function viewerManualInput(v){
   } else { const n=cbDigits(v).length; if(st) st.textContent=n?`${n}/47 dígitos`:''; }
 }
 /* ===================== PIX (QR + COPIA E COLA) ===================== */
-const CDN_QR=['https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js','https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js'];
-async function ensureQR(){ if(window.QRCode) return; await loadFirst(CDN_QR); }
+const CDN_QR=['https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js','https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'];
+async function ensureQR(){ if(window.qrcode) return; await loadFirst(CDN_QR); }
 async function copiarTexto(txt,msg){ try{ await navigator.clipboard.writeText(txt); toast(msg||'Copiado.'); }
   catch(e){ const t=document.createElement('textarea'); t.value=txt; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast(msg||'Copiado.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); } }
 
@@ -1540,9 +1540,9 @@ function pixMontar(){
 async function pixDesenharQR(texto){
   const el=$('pix-qr'); if(!el) return; el.innerHTML='';
   try{ await ensureQR();
-    const svg=await window.QRCode.toString(texto,{type:'svg',margin:1,width:200,errorCorrectionLevel:'M'});
-    el.innerHTML=svg;
-  }catch(e){ el.innerHTML='<div class="pix-msg">QR indisponível offline — use “Copiar”.</div>'; }
+    const qr=window.qrcode(0,'M'); qr.addData(texto); qr.make();
+    el.innerHTML=qr.createSvgTag({cellSize:6, margin:2, scalable:true});
+  }catch(e){ el.innerHTML='<div class="pix-msg">QR indisponível (sem internet?) — use “Copiar”.</div>'; }
 }
 function pixCopiar(){ copiarTexto(pixState.brcode, 'Pix copia e cola copiado.'); }
 function pixCorrigir(){
