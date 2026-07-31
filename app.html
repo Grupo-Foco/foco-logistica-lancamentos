@@ -1537,19 +1537,19 @@ function pixMontar(){
     <div class="pix-head">⚡ Pagar com Pix — escaneie o QR no app do banco</div>
     <div class="pix-msg">Chave (${esc(pixState.tipo)}): <b>${esc(pixState.chave)}</b>${pixState.valor?` · valor ${money(pixState.valor)}`:''}</div>
     <div class="pix-wrap">
-      <div id="pix-qr" class="pix-qr"></div>
+      <div class="pix-qr"></div>
       <div class="pix-side">
-        <div class="pix-cc" id="pix-cc">${esc(brcode)}</div>
+        <div class="pix-cc">${esc(brcode)}</div>
         <div class="cb-acts">
           <button type="button" class="btn btn-primary btn-sm" onclick="pixCopiar()">⧉ Copiar Pix copia e cola</button>
           <button type="button" class="btn btn-ghost btn-sm" onclick="pixCorrigir()">✎ Chave errada?</button>
         </div>
       </div>
     </div>`;
-  pixDesenharQR(brcode);
+  pixDesenharQR(box.querySelector('.pix-qr'), brcode);
 }
-async function pixDesenharQR(texto){
-  const el=$('pix-qr'); if(!el) return; el.innerHTML='';
+async function pixDesenharQR(el, texto){
+  if(!el) return; el.innerHTML='';
   try{ await ensureQR();
     const qr=window.qrcode(0,'M'); qr.addData(texto); qr.make();
     el.innerHTML=qr.createSvgTag({cellSize:6, margin:2, scalable:true});
@@ -1560,13 +1560,14 @@ function pixCorrigir(){
   const box=$(pixTarget); if(!box) return;
   box.innerHTML=`<div class="pix-head">⚡ Ajustar chave Pix</div>
     <div class="pix-msg">Tipo detectado: <b>${esc(pixState.tipo)}</b>. Se estiver errado, escolha o tipo e confirme:</div>
-    <select id="pix-tipo" class="cb-sel"><option>CPF</option><option>CNPJ</option><option>Telefone</option><option>E-mail</option><option>Aleatória</option></select>
-    <input id="pix-chave" class="cb-input" value="${esc(pixState.chave)}" placeholder="chave Pix">
+    <select class="cb-sel pix-tipo"><option>CPF</option><option>CNPJ</option><option>Telefone</option><option>E-mail</option><option>Aleatória</option></select>
+    <input class="cb-input pix-chave" value="${esc(pixState.chave)}" placeholder="chave Pix">
     <div class="cb-acts" style="margin-top:10px"><button type="button" class="btn btn-primary btn-sm" onclick="pixAplicarManual()">Gerar QR</button></div>`;
-  const sel=$('pix-tipo'); if(sel) sel.value=pixState.tipo;
+  const sel=box.querySelector('.pix-tipo'); if(sel) sel.value=pixState.tipo;
 }
 function pixAplicarManual(){
-  const tipo=$('pix-tipo').value; let chave=($('pix-chave').value||'').trim();
+  const box=$(pixTarget); if(!box) return;
+  const tipo=box.querySelector('.pix-tipo').value; let chave=(box.querySelector('.pix-chave').value||'').trim();
   if(tipo==='CPF'||tipo==='CNPJ') chave=chave.replace(/\D/g,'');
   else if(tipo==='Telefone'){ const d=chave.replace(/\D/g,''); chave=chave.startsWith('+')?('+'+d):('+55'+d); }
   else if(tipo==='E-mail') chave=chave.toLowerCase();
