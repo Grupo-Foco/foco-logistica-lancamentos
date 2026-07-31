@@ -1241,14 +1241,14 @@ function zxScanLum(lum,w,h){
   const src=new ZXing.RGBLuminanceSource(lum,w,h);
   const hints=new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
   const achados=new Set();
-  const regions=[[0,0,w,h]]; const by=Math.floor(h*0.6); if(h-by>60) regions.push([0,by,w,h-by]);
+  const regions=[[0,0,w,h]]; const by=Math.floor(h*0.55); if(h-by>60) regions.push([0,by,w,h-by]);
   for(const [rx,ry,rw,rh] of regions){
     let sub;
     if(rx===0&&ry===0&&rw===w&&rh===h){ sub=src; }
     else { const cl=new Uint8ClampedArray(rw*rh); for(let y=0;y<rh;y++){ const off=(ry+y)*w+rx; for(let x=0;x<rw;x++) cl[y*rw+x]=lum[off+x]; } sub=new ZXing.RGBLuminanceSource(cl,rw,rh); }
     for(const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]){
       let bmp; try{ bmp=new ZXing.BinaryBitmap(new Bin(sub)); }catch(e){ continue; }
-      const reader=new ZXing.ITFReader(); const N=180;
+      const reader=new ZXing.ITFReader(); const N=200;
       for(let k=0;k<N;k++){ const y=Math.floor(rh*(k+0.5)/N);
         try{ const row=bmp.getBlackRow(y,null); const res=reader.decodeRow(y,row,hints); const txt=cbDigits(res.getText());
           if(txt.length===44){ const linha=cbBarcodeParaLinha(txt); if(linha && cbLinhaValida(linha)) achados.add(linha); }
@@ -1262,7 +1262,7 @@ function zxScanLum(lum,w,h){
 function zxDecodeCanvas(srcCanvas){
   if(!window.ZXing) return [];
   const W=srcCanvas.width, H=srcCanvas.height;
-  for(const f of [1,0.75,0.6,0.5]){
+  for(const f of [1,0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5,0.45]){
     let lum,w,h;
     if(f===1){ const o=canvasToLum(srcCanvas); lum=o.lum; w=o.w; h=o.h; }
     else { w=Math.max(1,Math.round(W*f)); h=Math.max(1,Math.round(H*f));
