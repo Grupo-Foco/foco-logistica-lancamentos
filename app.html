@@ -177,6 +177,7 @@ td:last-child{white-space:nowrap;}
 .docs-cell{display:flex;gap:5px;align-items:center;}
 .doc-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 6px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;color:#fff;}
 .doc-badge.b{background:var(--verde-mid);} .doc-badge.nf{background:#c8781e;}
+.doc-badge.pix{background:#0d9488;font-size:13px;}
 .doc-badge:hover{filter:brightness(1.12);}
 .doc-empty{color:var(--cinza);}
 /* visualizador (preview) */
@@ -520,6 +521,15 @@ td:last-child{white-space:nowrap;}
 <div class="toast" id="toast"></div>
 <div class="loading hidden" id="loading"><div class="spinner"></div><div class="t">Carregando…</div></div>
 
+<div id="pixPopOverlay" style="display:none;position:fixed;inset:0;background:rgba(39,64,31,.5);backdrop-filter:blur(3px);z-index:420;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;" onclick="if(event.target===this)fecharPixPop()">
+  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--creme-dark);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--verde)" id="pix-pop-title">Pagar com Pix</div>
+      <button class="btn btn-ghost" onclick="fecharPixPop()">✕</button>
+    </div>
+    <div style="padding:18px 22px"><div id="pix-pop-body"></div></div>
+  </div>
+</div>
 <script>
 /* ===================== CONFIG ===================== */
 const SB_URL = 'https://kafucdhwbgpdwefkxlta.supabase.co';
@@ -1017,7 +1027,7 @@ function renderLista(){
     <td class="nowrap mono">${esc(d.placa||'—')}${d.cg&&String(d.cg).startsWith('RT')?`<span class="rateio-tag">rateio</span>`:''}</td>
     <td class="val">${money(d.valor)}${(+d.juros>0)?`<div style="font-size:10px;color:var(--amber);font-weight:600">+ juros ${money(d.juros)}</div>`:''}</td>
     <td class="nowrap" style="text-align:center"><span class="badge ${d.status==='PAGO'?'pago':'apagar'}">${d.status==='PAGO'?'PAGO':'A PAGAR'}</span></td>
-    <td class="nowrap"><div class="docs-cell">${nb?`<span class="doc-badge b" onclick="verDoc('boleto',${d.id})" title="Ver boleto">B${nb>1?nb:''}</span>`:''}${nn?`<span class="doc-badge nf" onclick="verDoc('nf',${d.id})" title="Ver nota">NF${nn>1?nn:''}</span>`:''}${(!nb&&!nn)?'<span class="doc-empty">—</span>':''}</div></td>
+    <td class="nowrap"><div class="docs-cell">${nb?`<span class="doc-badge b" onclick="verDoc('boleto',${d.id})" title="Ver boleto">B${nb>1?nb:''}</span>`:''}${nn?`<span class="doc-badge nf" onclick="verDoc('nf',${d.id})" title="Ver nota">NF${nn>1?nn:''}</span>`:''}${(String(d.forma_pagamento||'').toUpperCase()==='PIX'&&d.chave_pix)?`<span class="doc-badge pix" onclick="pixPopup(${d.id})" title="Pagar com Pix (QR)">⚡</span>`:''}${(!nb&&!nn&&!(String(d.forma_pagamento||'').toUpperCase()==='PIX'&&d.chave_pix))?'<span class="doc-empty">—</span>':''}</div></td>
     <td class="nowrap mono">${esc(d.conta||'—')}</td>
     <td class="nowrap"><div class="row-actions">
       ${d.status==='A_PAGAR'?`<button class="btn btn-sm btn-primary" onclick="darBaixa(${d.id})">Baixa</button>`:''}
@@ -1509,17 +1519,18 @@ function pixBRCode({chave, valor, nome, cidade, txid}){
   p+=pixTlv('58','BR')+pixTlv('59',nom)+pixTlv('60',cid)+pixTlv('62',pixTlv('05',tx))+'6304';
   return p+pixCrc16(p); }
 
-let pixState={chave:'',tipo:'',valor:0,nome:'',brcode:''};
+let pixState={chave:'',tipo:'',valor:0,nome:'',brcode:''}; let pixTarget='det-pix';
 function renderPix(d){
   const box=$('det-pix'); if(!box) return;
   const forma=(d.forma_pagamento||'').toUpperCase();
   if(forma!=='PIX' || !d.chave_pix){ box.style.display='none'; box.innerHTML=''; return; }
+  pixTarget='det-pix';
   const det=pixTipoChave(d.chave_pix);
   pixState={chave:det.valor, tipo:det.tipo, valor:+d.valor||0, nome:d.fornecedor||'RECEBEDOR', brcode:''};
   pixMontar();
 }
 function pixMontar(){
-  const box=$('det-pix'); if(!box) return; box.style.display='block';
+  const box=$(pixTarget); if(!box) return; box.style.display='block';
   const brcode=pixBRCode({chave:pixState.chave, valor:pixState.valor, nome:pixState.nome, cidade:'BRASIL', txid:''});
   pixState.brcode=brcode;
   box.innerHTML=`
@@ -1546,7 +1557,7 @@ async function pixDesenharQR(texto){
 }
 function pixCopiar(){ copiarTexto(pixState.brcode, 'Pix copia e cola copiado.'); }
 function pixCorrigir(){
-  const box=$('det-pix'); if(!box) return;
+  const box=$(pixTarget); if(!box) return;
   box.innerHTML=`<div class="pix-head">⚡ Ajustar chave Pix</div>
     <div class="pix-msg">Tipo detectado: <b>${esc(pixState.tipo)}</b>. Se estiver errado, escolha o tipo e confirme:</div>
     <select id="pix-tipo" class="cb-sel"><option>CPF</option><option>CNPJ</option><option>Telefone</option><option>E-mail</option><option>Aleatória</option></select>
@@ -1561,6 +1572,17 @@ function pixAplicarManual(){
   else if(tipo==='E-mail') chave=chave.toLowerCase();
   pixState.chave=chave; pixState.tipo=tipo; pixMontar();
 }
+
+function pixPopup(id){
+  const d=despesas.find(x=>x.id===id); if(!d||!d.chave_pix) return;
+  pixTarget='pix-pop-body';
+  const det=pixTipoChave(d.chave_pix);
+  pixState={chave:det.valor, tipo:det.tipo, valor:+d.valor||0, nome:d.fornecedor||'RECEBEDOR', brcode:''};
+  const t=$('pix-pop-title'); if(t) t.textContent=d.fornecedor||'Pagar com Pix';
+  $('pixPopOverlay').style.display='flex';
+  pixMontar();
+}
+function fecharPixPop(){ const o=$('pixPopOverlay'); if(o) o.style.display='none'; pixTarget='det-pix'; }
 
 /* ===================== NAVEGAÇÃO ===================== */
 function showView(v){
