@@ -1195,7 +1195,12 @@ function cbBarcodeParaLinha(bc){ bc=cbDigits(bc); if(bc.length!==44) return null
   return (c1+cbMod10(c1))+(c2+cbMod10(c2))+(c3+cbMod10(c3))+dvGeral+fatorValor; }
 function cbDV(bc43){ const p=[2,3,4,5,6,7,8,9]; let s=0,k=0; for(let i=bc43.length-1;i>=0;i--){ s+=(+bc43[i])*p[k%8]; k++; } let dv=11-(s%11); if(dv===0||dv>9) dv=1; return dv; }
 function cbBarcodeValido(bc){ bc=cbDigits(bc); if(bc.length!==44) return false; return cbDV(bc.slice(0,4)+bc.slice(5))===(+bc[4]); }
-function cbLinhaValida(l){ l=cbDigits(l); return l.length===47 && cbBarcodeValido(cbLinhaParaBarcode(l)); }
+function cbLinhaValida(l){ l=cbDigits(l);
+  if(l.length!==47 || l[3]!=='9') return false;
+  if(cbMod10(l.slice(0,9))!==(+l[9])) return false;
+  if(cbMod10(l.slice(10,20))!==(+l[20])) return false;
+  if(cbMod10(l.slice(21,31))!==(+l[31])) return false;
+  return cbBarcodeValido(cbLinhaParaBarcode(l)); }
 function cbFatorData(f){ f=parseInt(f,10); if(!f) return null; const base=Date.UTC(2025,1,22); return new Date(base+(f-1000)*86400000); }
 function cbFmtData(d){ if(!d) return '—'; const p=n=>String(n).padStart(2,'0'); return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()}`; }
 function cbParse(l){ l=cbDigits(l); if(l.length!==47) return null; return { linha:l, venc:cbFatorData(l.slice(33,37)), valor:(+l.slice(37,47))/100 }; }
@@ -1209,59 +1214,88 @@ async function ensurePdfjs(){ if(window.pdfjsLib) return window.pdfjsLib;
 async function ensureZxing(){ if(window.ZXing) return window.ZXing; await loadFirst(CDN_ZX); return window.ZXing; }
 async function ensureBar(){ if(window.JsBarcode) return; await loadFirst(CDN_BAR); }
 
-async function pdfExtrairLinhas(file){
+async function pdfTextoCompleto(file){
   const lib=await ensurePdfjs(); const buf=await file.arrayBuffer();
   const doc=await lib.getDocument({data:buf}).promise; let full='';
   for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent(); full+=tc.items.map(i=>i.str).join(' ')+'\n'; }
-  const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
-  return [...new Set([...full.matchAll(re)].map(m=>cbDigits(m[0])).filter(l=>l.length===47))];
+  return full;
 }
+function extrairLinhasDeTexto(txt){
+  const out=new Set();
+  const re=/\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14}/g;
+  for(const m of txt.matchAll(re)){ const l=cbDigits(m[0]); if(l.length===47 && cbLinhaValida(l)) out.add(l); }
+  if(!out.size){ const d=cbDigits(txt);
+    for(let i=0;i+47<=d.length;i++){ const w=d.slice(i,i+47); if(cbLinhaValida(w)) out.add(w); } }
+  return [...out];
+}
+async function pdfExtrairLinhas(file){ return extrairLinhasDeTexto(await pdfTextoCompleto(file)); }
 
-function zxDecodeCanvas(canvas){
-  const ZXing=window.ZXing; if(!ZXing) return [];
+function canvasToLum(canvas){
   const w=canvas.width,h=canvas.height; const data=canvas.getContext('2d').getImageData(0,0,w,h).data;
   const lum=new Uint8ClampedArray(w*h);
   for(let i=0;i<w*h;i++){ lum[i]=(data[i*4]*0.299+data[i*4+1]*0.587+data[i*4+2]*0.114)|0; }
+  return {lum,w,h};
+}
+function zxScanLum(lum,w,h){
+  const ZXing=window.ZXing; if(!ZXing) return [];
   const src=new ZXing.RGBLuminanceSource(lum,w,h);
   const hints=new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-  const achados=new Set(); const N=110;
-  for(const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]){
-    let bmp; try{ bmp=new ZXing.BinaryBitmap(new Bin(src)); }catch(e){ continue; }
-    const reader=new ZXing.ITFReader();
-    for(let k=0;k<N;k++){ const y=Math.floor(h*(k+0.5)/N);
-      try{ const row=bmp.getBlackRow(y,null); const res=reader.decodeRow(y,row,hints); const txt=cbDigits(res.getText());
-        if(txt.length===44){ const linha=cbBarcodeParaLinha(txt); if(linha && cbLinhaValida(linha)) achados.add(linha); }
-      }catch(e){}
+  const achados=new Set();
+  const regions=[[0,0,w,h]]; const by=Math.floor(h*0.6); if(h-by>60) regions.push([0,by,w,h-by]);
+  for(const [rx,ry,rw,rh] of regions){
+    let sub;
+    if(rx===0&&ry===0&&rw===w&&rh===h){ sub=src; }
+    else { const cl=new Uint8ClampedArray(rw*rh); for(let y=0;y<rh;y++){ const off=(ry+y)*w+rx; for(let x=0;x<rw;x++) cl[y*rw+x]=lum[off+x]; } sub=new ZXing.RGBLuminanceSource(cl,rw,rh); }
+    for(const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]){
+      let bmp; try{ bmp=new ZXing.BinaryBitmap(new Bin(sub)); }catch(e){ continue; }
+      const reader=new ZXing.ITFReader(); const N=180;
+      for(let k=0;k<N;k++){ const y=Math.floor(rh*(k+0.5)/N);
+        try{ const row=bmp.getBlackRow(y,null); const res=reader.decodeRow(y,row,hints); const txt=cbDigits(res.getText());
+          if(txt.length===44){ const linha=cbBarcodeParaLinha(txt); if(linha && cbLinhaValida(linha)) achados.add(linha); }
+        }catch(e){}
+      }
+      if(achados.size) return [...achados];
     }
-    if(achados.size) break;
   }
   return [...achados];
+}
+function zxDecodeCanvas(srcCanvas){
+  if(!window.ZXing) return [];
+  const W=srcCanvas.width, H=srcCanvas.height;
+  for(const f of [1,0.75,0.6,0.5]){
+    let lum,w,h;
+    if(f===1){ const o=canvasToLum(srcCanvas); lum=o.lum; w=o.w; h=o.h; }
+    else { w=Math.max(1,Math.round(W*f)); h=Math.max(1,Math.round(H*f));
+      const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d');
+      ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high'; ctx.drawImage(srcCanvas,0,0,w,h);
+      lum=canvasToLum(c).lum; }
+    const r=zxScanLum(lum,w,h); if(r.length) return r;
+  }
+  return [];
 }
 
 async function pdfDecodeImagem(file){
   const lib=await ensurePdfjs(); await ensureZxing();
   const buf=await file.arrayBuffer(); const doc=await lib.getDocument({data:buf}).promise; const out=[];
   for(let p=1;p<=doc.numPages;p++){ const page=await doc.getPage(p);
-    const base=page.getViewport({scale:1}); const scale=Math.min(5, Math.max(3, 2400/base.width));
+    const base=page.getViewport({scale:1}); const scale=Math.min(6, Math.max(4.5, 3300/base.width));
     const vp=page.getViewport({scale});
     const canvas=document.createElement('canvas'); canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
     await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-    zxDecodeCanvas(canvas).forEach(l=>out.push(l)); }
+    zxDecodeCanvas(canvas).forEach(l=>out.push(l));
+    canvas.width=canvas.height=0;
+  }
   return [...new Set(out)];
 }
 
 async function imagemDecode(file){
   await ensureZxing(); const url=URL.createObjectURL(file);
   try{ const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
-    let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; const max=2600;
+    let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; const max=3200;
     if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
     const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-    canvas.getContext('2d').drawImage(img,0,0,w,h);
-    let r=zxDecodeCanvas(canvas);
-    if(!r.length){ // 2ª tentativa: recorta a metade inferior (onde costuma estar o código) ampliada
-      const ch=Math.floor(h*0.55); const c2=document.createElement('canvas'); c2.width=w; c2.height=ch;
-      c2.getContext('2d').drawImage(canvas,0,h-ch,w,ch,0,0,w,ch); r=zxDecodeCanvas(c2); }
-    return r;
+    const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high'; ctx.drawImage(img,0,0,w,h);
+    return zxDecodeCanvas(canvas);
   } finally { URL.revokeObjectURL(url); }
 }
 
