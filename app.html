@@ -263,6 +263,14 @@ td:last-child{white-space:nowrap;}
 .btn-vence-amanha.zero{background:#eef1f3;border-color:#b8c2c9;color:#6b7780;box-shadow:none;}
 .btn-vence-amanha.zero:hover{background:#e4e9ec;box-shadow:0 2px 8px rgba(120,140,150,.2);}
 .btn-vence-amanha .vh-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#5d8aa8;animation:none;}
+.btn-comprov{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid #0d9488;background:#d7f2ee;color:#0b6b60;cursor:pointer;display:inline-flex;align-items:center;gap:9px;white-space:nowrap;box-shadow:0 2px 10px rgba(13,148,136,.28);transition:transform .15s,background .2s;}
+.btn-comprov:hover{background:#c3ebe4;transform:translateY(-1px);}
+.btn-comprov .vh-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#0d9488;animation:vencePulse 1.6s infinite;}
+.comprov-item{border:1px solid var(--creme-dark);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--branco);}
+.comprov-meta{font-size:13px;color:var(--texto);margin-bottom:4px;font-family:'DM Sans',sans-serif;}
+.comprov-meta a{color:var(--verde);}
+.btn-upcomprov{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid var(--verde-mid);background:var(--branco);color:var(--verde);cursor:pointer;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:transform .15s,background .2s;}
+.btn-upcomprov:hover{background:var(--creme);transform:translateY(-1px);}
 </style>
 </head>
 <body>
@@ -452,6 +460,9 @@ td:last-child{white-space:nowrap;}
         <button id="btn-vencido"      class="btn-vencido"      onclick="filtrarVencidos()"    style="display:none;"></button>
         <button id="btn-vence-hoje"   class="btn-vence-hoje"   onclick="filtrarVenceHoje()"   style="display:none;"></button>
         <button id="btn-vence-amanha" class="btn-vence-amanha" onclick="filtrarVenceAmanha()" style="display:none;"></button>
+        <button id="btn-comprov" class="btn-comprov" onclick="abrirComprovResolver()" style="display:none;"></button>
+        <button id="btn-upcomprov" class="btn-upcomprov" onclick="document.getElementById('comprov-file').click()">📎 Carregar comprovante</button>
+        <input type="file" id="comprov-file" accept="application/pdf" multiple style="display:none" onchange="carregarComprovanteLocal(this.files)">
       </div>
       <p id="painel-sub">—</p>
     </div>
@@ -562,6 +573,15 @@ td:last-child{white-space:nowrap;}
     <div style="padding:18px 22px"><div id="pix-pop-body"></div></div>
   </div>
 </div>
+<div id="comprovOverlay" style="display:none;position:fixed;inset:0;background:rgba(39,64,31,.5);backdrop-filter:blur(3px);z-index:430;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;" onclick="if(event.target===this)fecharComprovResolver()">
+  <div style="background:#fff;border-radius:16px;max-width:640px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--creme-dark);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--verde)">📎 Comprovantes p/ conferir</div>
+      <button class="btn btn-ghost" onclick="fecharComprovResolver()">✕</button>
+    </div>
+    <div style="padding:18px 22px;max-height:70vh;overflow:auto"><div id="comprov-body"></div></div>
+  </div>
+</div>
 <script>
 /* ===================== CONFIG ===================== */
 const SB_URL = 'https://kafucdhwbgpdwefkxlta.supabase.co';
@@ -595,6 +615,7 @@ function contaOptions(sel){ return ['<option value="">Selecionar…</option>'].c
 /* ===================== SUPABASE REST ===================== */
 async function sb(path, opts={}){
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    cache:'no-store',
     ...opts,
     headers:{ 'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,
       'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',
@@ -823,6 +844,7 @@ async function carregar(){
     ]);
     despesas=d||[]; caminhoesBD=c||[]; fornecedoresBD=f||[]; motoristasBD=m||[]; fretesBD=fr||[];
     preencherListas(); renderLista(); setSync('online');
+    processarComprovantes();
   }catch(e){ console.error(e); setSync('err'); toast('Erro ao carregar dados.',true); }
   finally{ showLoading(false); }
 }
@@ -1140,6 +1162,8 @@ async function confirmarBaixa(){
   try{
     const patch=id=>{ const body={status:'PAGO',pagamento:data,conta}; if(baixaAlvo.modo==='single') body.juros=juros; return sb(`despesas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify(body)}); };
     await Promise.all(baixaAlvo.ids.map(patch));
+    baixaAlvo.ids.forEach(id=>{ const dd=despesas.find(x=>x.id===id); if(dd){ dd.status='PAGO'; dd.pagamento=data; dd.conta=conta; if(baixaAlvo.modo==='single') dd.juros=juros; } });
+    renderLista();
     toast(baixaAlvo.modo==='lote'? `${baixaAlvo.ids.length} baixado(s).` : 'Baixa registrada.');
     setSync('online'); fecharBaixa(); await carregar();
   }catch(e){ console.error(e); setSync('err'); toast('Erro ao dar baixa: '+e.message,true); }
@@ -1195,7 +1219,8 @@ function openDetalhe(id){
   const bol=anexoArr(d.boleto), nf=anexoArr(d.nf);
   const btns=[
     ...bol.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','Boleto ${i+1}',true,'${d.codigo_barras||''}')">🏦 Ver Boleto ${bol.length>1?i+1:''}</button>`),
-    ...nf.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','NF ${i+1}')">📎 Ver NF ${nf.length>1?i+1:''}</button>`)
+    ...nf.map((p,i)=>`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(p)}','NF ${i+1}')">📎 Ver NF ${nf.length>1?i+1:''}</button>`),
+    ...(d.comprovante?[`<button class="btn btn-ghost btn-sm" onclick="verAnexoPath('${esc(d.comprovante)}','Comprovante')">🧾 Ver Comprovante</button>`]:[])
   ];
   $('det-anexos').innerHTML = btns.length? btns.join('') : '<span style="color:var(--cinza);font-size:13px">Sem anexos.</span>';
   $('det-baixar').style.display = d.status==='A_PAGAR'?'':'none';
@@ -1638,6 +1663,113 @@ function pixPopup(id){
   pixMontar();
 }
 function fecharPixPop(){ const o=$('pixPopOverlay'); if(o) o.style.display='none'; pixTarget='det-pix'; }
+
+/* ===================== COMPROVANTES (INBOX / AUTO-BAIXA) ===================== */
+let comprovantesPendentes=[];
+async function pdfTextoDeUrl(url){ const lib=await ensurePdfjs(); const doc=await lib.getDocument({url}).promise; return pdfTextoDeDoc(doc); }
+function comprovChaveCanon(chave){ chave=String(chave||'').trim();
+  if(chave.includes('@')) return chave.toLowerCase();
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chave)) return chave.toLowerCase();
+  const d=chave.replace(/\D/g,'');
+  return d||chave.toLowerCase(); }
+function comprovChaveIgual(a,b){ const A=comprovChaveCanon(a), B=comprovChaveCanon(b); if(!A||!B) return false;
+  if(A===B) return true;
+  const da=A.replace(/\D/g,''), db=B.replace(/\D/g,'');
+  if(da&&db){ if(da===db) return true; if(('55'+da)===db||da===('55'+db)) return true; if(da.length>=11&&db.length>=11&&da.slice(-11)===db.slice(-11)) return true; }
+  return false; }
+function comprovExtrair(txt){
+  const t=String(txt||'').replace(/\s+/g,' ');
+  const mVal=t.match(/R\$\s*([\d.]{1,12},\d{2})/);
+  const valor=mVal? parseFloat(mVal[1].replace(/\./g,'').replace(',','.')) : null;
+  const mData=t.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(?:às|as)\s*\d{2}:\d{2}/) || t.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const dataISO=mData? `${mData[3]}-${mData[2]}-${mData[1]}` : null;
+  const mChave=t.match(/Chave Pix\s*([+\w.\-@]+)/i);
+  const chave=mChave? mChave[1] : null;
+  const mId=t.match(/\b(E\d{20,})\b/);
+  return {valor, dataISO, chave, idPix: mId?mId[1]:null};
+}
+async function comprovListarInbox(){
+  const r=await fetch(`${SB_URL}/storage/v1/object/list/comprovantes`,{method:'POST',cache:'no-store',
+    headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'},
+    body:JSON.stringify({prefix:'inbox/', limit:1000, offset:0, sortBy:{column:'name',order:'asc'}})});
+  if(!r.ok) throw new Error('list '+r.status);
+  const arr=await r.json();
+  return (arr||[]).filter(o=>o&&o.name&&o.id&&/\.pdf$/i.test(o.name)).map(o=>'inbox/'+o.name);
+}
+function comprovCandidatos(rc){
+  return despesas.filter(d=> d.status==='A_PAGAR' && String(d.forma_pagamento||'').toUpperCase().includes('PIX') && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave));
+}
+async function comprovBaixar(d, path, dataISO){
+  const conta=d.conta||'LOG BB'; const dt=dataISO||vencHojeISO();
+  await sb(`despesas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'PAGO', pagamento:dt, conta, comprovante:path})});
+  d.status='PAGO'; d.pagamento=dt; d.conta=conta; d.comprovante=path;
+}
+async function processarComprovantes(){
+  let paths;
+  try{ paths=await comprovListarInbox(); }catch(e){ return; }
+  const claimed=new Set(despesas.map(d=>d.comprovante).filter(Boolean));
+  const pend=[]; let baixados=0;
+  for(const path of paths){
+    if(claimed.has(path)) continue;
+    let txt; try{ txt=await pdfTextoDeUrl(publicUrl(path)); }catch(e){ continue; }
+    const rc=comprovExtrair(txt);
+    const cand=rc.chave? comprovCandidatos(rc) : [];
+    const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
+    if(exato.length===1){
+      try{ await comprovBaixar(exato[0], path, rc.dataISO); baixados++; }
+      catch(e){ pend.push({path, rc, cand, motivo:'erro ao baixar'}); }
+    } else {
+      pend.push({path, rc, cand, motivo: cand.length? (rc.valor==null?'não li o valor - confirme':'valor nao confere / mais de um') : 'nenhum lancamento a pagar com essa chave'});
+    }
+  }
+  comprovantesPendentes=pend;
+  if(baixados>0){ renderLista(); toast(`✅ ${baixados} comprovante(s) baixado(s) automaticamente.`); }
+  atualizarBadgeComprov();
+}
+async function carregarComprovanteLocal(fileList){
+  const files=[...(fileList||[])]; if(!files.length) return;
+  toast('Lendo comprovante(s)…');
+  let baixados=0, pend=0;
+  for(const file of files){
+    let txt=''; try{ txt=await pdfTextoCompleto(file); }catch(e){}
+    const rc=comprovExtrair(txt);
+    let path=null; try{ path=await uploadAnexo(file,'inbox'); }catch(e){ toast('Falha ao enviar: '+e.message,true); continue; }
+    const cand=rc.chave? comprovCandidatos(rc):[];
+    const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
+    if(exato.length===1){ try{ await comprovBaixar(exato[0], path, rc.dataISO); baixados++; }catch(e){ comprovantesPendentes.push({path,rc,cand,motivo:'erro ao baixar'}); pend++; } }
+    else { comprovantesPendentes.push({path, rc, cand, motivo: cand.length? (rc.valor==null?'não li o valor - confirme':'valor nao confere / mais de um') : 'nenhum lancamento a pagar com essa chave'}); pend++; }
+  }
+  renderLista(); atualizarBadgeComprov();
+  const inp=$('comprov-file'); if(inp) inp.value='';
+  if(baixados) toast(`✅ ${baixados} comprovante(s) baixado(s).`);
+  if(pend) abrirComprovResolver();
+}
+function atualizarBadgeComprov(){
+  const b=$('btn-comprov'); if(!b) return; const n=comprovantesPendentes.length;
+  if(n>0){ b.style.display='inline-flex'; b.innerHTML='<span class="vh-dot"></span>📎 '+n+' comprovante'+(n>1?'s':'')+' p/ conferir'; }
+  else { b.style.display='none'; }
+}
+function abrirComprovResolver(){
+  const body=$('comprov-body'); if(!body) return;
+  if(!comprovantesPendentes.length){ body.innerHTML='<p class="pix-msg">Nenhum comprovante pendente. 🎉</p>'; }
+  else body.innerHTML=comprovantesPendentes.map((p,i)=>{
+    const rc=p.rc; const cands=(p.cand||[]);
+    const btns=cands.length? cands.map(d=>`<button type="button" class="btn btn-primary btn-sm" onclick="comprovVincular(${i},${d.id})">Baixar → ${esc(d.fornecedor||'')} · ${money(d.valor)}</button>`).join(' ')
+      : '<span class="pix-msg">Nenhum lançamento "a pagar" com essa chave.</span>';
+    return `<div class="comprov-item">
+      <div class="comprov-meta"><b>${money(rc.valor||0)}</b> · ${rc.dataISO? fdate(rc.dataISO):'sem data'} · chave <b>${esc(rc.chave||'—')}</b> · <a href="${publicUrl(p.path)}" target="_blank">ver PDF</a></div>
+      <div class="pix-msg">${esc(p.motivo)}</div>
+      <div class="cb-acts">${btns}</div>
+    </div>`;
+  }).join('');
+  $('comprovOverlay').style.display='flex';
+}
+function fecharComprovResolver(){ $('comprovOverlay').style.display='none'; }
+async function comprovVincular(i, id){
+  const p=comprovantesPendentes[i]; const d=despesas.find(x=>x.id===id); if(!p||!d) return;
+  try{ await comprovBaixar(d, p.path, p.rc.dataISO); comprovantesPendentes.splice(i,1); renderLista(); atualizarBadgeComprov(); abrirComprovResolver(); toast('Comprovante vinculado e baixado.'); }
+  catch(e){ toast('Erro: '+e.message,true); }
+}
 
 /* ===================== NAVEGAÇÃO ===================== */
 function showView(v){
