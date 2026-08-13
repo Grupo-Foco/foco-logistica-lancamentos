@@ -239,6 +239,30 @@ td:last-child{white-space:nowrap;}
 .pix-qr svg{width:100%;height:100%;display:block;}
 .pix-side{flex:1;min-width:220px;}
 .pix-cc{font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;color:var(--texto);word-break:break-all;background:var(--creme);border:1px solid var(--creme-dark);border-radius:8px;padding:10px;margin-bottom:10px;max-height:130px;overflow:auto;}
+/* ===== Botões de vencimento (Vencido/Hoje/Amanhã) ===== */
+.panel-title-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.btn-vencido{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid #e74c3c;background:#fdecea;color:#a5261a;cursor:pointer;display:inline-flex;align-items:center;gap:9px;transition:transform .15s,background .2s,box-shadow .2s;white-space:nowrap;box-shadow:0 2px 10px rgba(231,76,60,.28);}
+.btn-vencido:hover{background:#fbdad5;transform:translateY(-1px);box-shadow:0 4px 14px rgba(231,76,60,.4);}
+.btn-vencido:active{transform:translateY(0);}
+.btn-vencido.zero{background:#e8f5ec;border-color:#7bbf94;color:#2f6b45;box-shadow:none;}
+.btn-vencido.zero:hover{background:#dcefe2;box-shadow:0 2px 8px rgba(74,140,92,.2);}
+.btn-vencido .vh-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#e74c3c;animation:vencidoPulse 1.4s infinite;}
+.btn-vencido.zero .vh-dot{background:#37955f;animation:none;}
+@keyframes vencidoPulse{0%{box-shadow:0 0 0 0 rgba(231,76,60,.55);}70%{box-shadow:0 0 0 7px rgba(231,76,60,0);}100%{box-shadow:0 0 0 0 rgba(231,76,60,0);}}
+.btn-vence-hoje{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid #f0ad4e;background:#fff3cd;color:#8a5300;cursor:pointer;display:inline-flex;align-items:center;gap:9px;transition:transform .15s,background .2s,box-shadow .2s;white-space:nowrap;box-shadow:0 2px 10px rgba(240,173,78,.28);}
+.btn-vence-hoje:hover{background:#ffe8a1;transform:translateY(-1px);box-shadow:0 4px 14px rgba(240,173,78,.38);}
+.btn-vence-hoje:active{transform:translateY(0);}
+.btn-vence-hoje.zero{background:#e8f5ec;border-color:#7bbf94;color:#2f6b45;box-shadow:none;}
+.btn-vence-hoje.zero:hover{background:#dcefe2;box-shadow:0 2px 8px rgba(74,140,92,.2);}
+.btn-vence-hoje .vh-dot{width:9px;height:9px;border-radius:50%;background:#e67e22;flex-shrink:0;animation:vencePulse 1.6s infinite;}
+.btn-vence-hoje.zero .vh-dot{background:#37955f;animation:none;}
+@keyframes vencePulse{0%{box-shadow:0 0 0 0 rgba(230,126,34,.55);}70%{box-shadow:0 0 0 7px rgba(230,126,34,0);}100%{box-shadow:0 0 0 0 rgba(230,126,34,0);}}
+.btn-vence-amanha{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid #5d8aa8;background:#e8f0f6;color:#2f5468;cursor:pointer;display:inline-flex;align-items:center;gap:9px;transition:transform .15s,background .2s,box-shadow .2s;white-space:nowrap;box-shadow:0 2px 10px rgba(93,138,168,.28);}
+.btn-vence-amanha:hover{background:#d8e6f0;transform:translateY(-1px);box-shadow:0 4px 14px rgba(93,138,168,.4);}
+.btn-vence-amanha:active{transform:translateY(0);}
+.btn-vence-amanha.zero{background:#eef1f3;border-color:#b8c2c9;color:#6b7780;box-shadow:none;}
+.btn-vence-amanha.zero:hover{background:#e4e9ec;box-shadow:0 2px 8px rgba(120,140,150,.2);}
+.btn-vence-amanha .vh-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#5d8aa8;animation:none;}
 </style>
 </head>
 <body>
@@ -422,7 +446,15 @@ td:last-child{white-space:nowrap;}
 <!-- ===================== PAINEL ===================== -->
 <div class="view" id="view-painel">
   <div class="wrap" style="max-width:min(1800px,96vw)">
-    <div class="page-h"><h1>Painel de despesas</h1><p id="painel-sub">—</p></div>
+    <div class="page-h">
+      <div class="panel-title-row">
+        <h1>Painel de despesas</h1>
+        <button id="btn-vencido"      class="btn-vencido"      onclick="filtrarVencidos()"    style="display:none;"></button>
+        <button id="btn-vence-hoje"   class="btn-vence-hoje"   onclick="filtrarVenceHoje()"   style="display:none;"></button>
+        <button id="btn-vence-amanha" class="btn-vence-amanha" onclick="filtrarVenceAmanha()" style="display:none;"></button>
+      </div>
+      <p id="painel-sub">—</p>
+    </div>
 
     <div class="kpis" id="kpis"></div>
 
@@ -1036,7 +1068,29 @@ function renderLista(){
     </div></td>
   </tr>`;}).join('');
   onSel();
+  atualizarBotoesVenc();
 }
+
+/* ===================== BOTÕES DE VENCIMENTO ===================== */
+function vencHojeISO(){ const d=new Date(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+dd; }
+function vencAddDiasISO(n){ const d=new Date(); d.setDate(d.getDate()+n); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+dd; }
+function contarVencidos(){ if(!Array.isArray(despesas)) return 0; const hoje=vencHojeISO(); return despesas.filter(d=>{ const v=(d&&d.vencimento||'').substring(0,10); return d && d.status==='A_PAGAR' && v && v<hoje; }).length; }
+function contarVenceHoje(){ if(!Array.isArray(despesas)) return 0; const hoje=vencHojeISO(); return despesas.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===hoje).length; }
+function contarVenceAmanha(){ if(!Array.isArray(despesas)) return 0; const amanha=vencAddDiasISO(1); return despesas.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===amanha).length; }
+function atualizarBotaoVencidos(){ const btn=document.getElementById('btn-vencido'); if(!btn) return; const n=contarVencidos(); btn.style.display='inline-flex';
+  if(n>0){ btn.classList.remove('zero'); btn.innerHTML='<span class="vh-dot"></span>⚠ '+n+' vencido'+(n>1?'s':''); btn.title='Clique para filtrar os '+n+' item(ns) em aberto já vencidos'; }
+  else { btn.classList.add('zero'); btn.innerHTML='<span class="vh-dot"></span>✓ Nenhum vencido'; btn.title='Nenhum item em aberto está vencido'; } }
+function atualizarBotaoVenceHoje(){ const btn=document.getElementById('btn-vence-hoje'); if(!btn) return; const n=contarVenceHoje(); btn.style.display='inline-flex';
+  if(n>0){ btn.classList.remove('zero'); btn.innerHTML='<span class="vh-dot"></span>⏰ '+n+' vencendo hoje'; btn.title='Clique para filtrar os '+n+' item(ns) em aberto que vencem hoje'; }
+  else { btn.classList.add('zero'); btn.innerHTML='<span class="vh-dot"></span>✓ Nada vence hoje'; btn.title='Nenhum item em aberto vence hoje'; } }
+function atualizarBotaoVenceAmanha(){ const btn=document.getElementById('btn-vence-amanha'); if(!btn) return; const n=contarVenceAmanha(); btn.style.display='inline-flex';
+  if(n>0){ btn.classList.remove('zero'); btn.innerHTML='<span class="vh-dot"></span>📅 '+n+' vencendo amanhã'; btn.title='Clique para filtrar os '+n+' item(ns) em aberto que vencem amanhã'; }
+  else { btn.classList.add('zero'); btn.innerHTML='<span class="vh-dot"></span>✓ Nada vence amanhã'; btn.title='Nenhum item em aberto vence amanhã'; } }
+function atualizarBotoesVenc(){ atualizarBotaoVencidos(); atualizarBotaoVenceHoje(); atualizarBotaoVenceAmanha(); }
+function _vencLimpa(ids){ ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
+function filtrarVencidos(){ const ontem=vencAddDiasISO(-1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo','flt-de']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vf=$('flt-ate'); if(vf) vf.value=ontem; renderLista(); }
+function filtrarVenceHoje(){ const hoje=vencHojeISO(); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=hoje; const vf=$('flt-ate'); if(vf) vf.value=hoje; renderLista(); }
+function filtrarVenceAmanha(){ const amanha=vencAddDiasISO(1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=amanha; const vf=$('flt-ate'); if(vf) vf.value=amanha; renderLista(); }
 
 /* ===================== SELEÇÃO / BAIXA EM LOTE ===================== */
 function onSel(){
