@@ -1666,6 +1666,13 @@ function fecharPixPop(){ const o=$('pixPopOverlay'); if(o) o.style.display='none
 
 /* ===================== COMPROVANTES (INBOX / AUTO-BAIXA) ===================== */
 let comprovantesPendentes=[];
+function _lsGet(k){ try{ return new Set(JSON.parse(localStorage.getItem(k)||'[]')); }catch(e){ return new Set(); } }
+function _lsSet(k,set){ try{ localStorage.setItem(k, JSON.stringify([...set])); }catch(e){} }
+let _comprovFeitos=_lsGet('foco_comprov_feitos');
+let _comprovDescartados=_lsGet('foco_comprov_descartados');
+function _marcaFeito(key){ if(key){ _comprovFeitos.add(key); _lsSet('foco_comprov_feitos',_comprovFeitos); } }
+function _marcaDescartado(key){ if(key){ _comprovDescartados.add(key); _lsSet('foco_comprov_descartados',_comprovDescartados); } }
+
 async function pdfTextoDeUrl(url){ const lib=await ensurePdfjs(); const doc=await lib.getDocument({url}).promise; return pdfTextoDeDoc(doc); }
 function comprovChaveCanon(chave){ chave=String(chave||'').trim();
   if(chave.includes('@')) return chave.toLowerCase();
@@ -1688,6 +1695,20 @@ function comprovExtrair(txt){
   const mId=t.match(/\b(E\d{20,})\b/);
   return {valor, dataISO, chave, idPix: mId?mId[1]:null};
 }
+function comprovExtrairVarios(txt){
+  const t=String(txt||'').replace(/\s+/g,' ');
+  const ids=[...t.matchAll(/\bE\d{20,}\b/g)];
+  if(ids.length<=1){ const r=comprovExtrair(t); return (r.chave||r.valor!=null)? [r] : []; }
+  const recs=[]; let start=0;
+  for(const m of ids){
+    const end=m.index+m[0].length;
+    const r=comprovExtrair(t.slice(start,end)); r.idPix=m[0];
+    if(r.chave||r.valor!=null) recs.push(r);
+    start=end;
+  }
+  return recs;
+}
+function comprovRecKey(rc){ return rc.idPix || `${rc.valor}|${rc.dataISO}|${comprovChaveCanon(rc.chave)}`; }
 async function comprovListarInbox(){
   const r=await fetch(`${SB_URL}/storage/v1/object/list/comprovantes`,{method:'POST',cache:'no-store',
     headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'},
@@ -1704,22 +1725,25 @@ async function comprovBaixar(d, path, dataISO){
   await sb(`despesas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'PAGO', pagamento:dt, conta, comprovante:path})});
   d.status='PAGO'; d.pagamento=dt; d.conta=conta; d.comprovante=path;
 }
+function comprovAvaliar(rc, path, destino){
+  const key=comprovRecKey(rc);
+  if(_comprovFeitos.has(key)) return 'pulado';
+  const cand=rc.chave? comprovCandidatos(rc):[];
+  const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
+  if(exato.length===1){ if(_comprovDescartados.has(key)){ _comprovDescartados.delete(key); _lsSet('foco_comprov_descartados',_comprovDescartados); } return {tipo:'baixar', d:exato[0], key, path, rc}; }
+  if(_comprovDescartados.has(key)) return 'pulado';
+  return {tipo:'pendente', item:{path, rc, key, cand, motivo: cand.length?(rc.valor==null?'não li o valor - confirme':'valor não confere / mais de um'):'nenhum lançamento a pagar com essa chave'}};
+}
 async function processarComprovantes(){
-  let paths;
-  try{ paths=await comprovListarInbox(); }catch(e){ return; }
-  const claimed=new Set(despesas.map(d=>d.comprovante).filter(Boolean));
+  let paths; try{ paths=await comprovListarInbox(); }catch(e){ return; }
   const pend=[]; let baixados=0;
   for(const path of paths){
-    if(claimed.has(path) || _comprovDescartados.has(path)) continue;
-    let txt; try{ txt=await pdfTextoDeUrl(publicUrl(path)); }catch(e){ continue; }
-    const rc=comprovExtrair(txt);
-    const cand=rc.chave? comprovCandidatos(rc) : [];
-    const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
-    if(exato.length===1){
-      try{ await comprovBaixar(exato[0], path, rc.dataISO); baixados++; }
-      catch(e){ pend.push({path, rc, cand, motivo:'erro ao baixar'}); }
-    } else {
-      pend.push({path, rc, cand, motivo: cand.length? (rc.valor==null?'não li o valor - confirme':'valor nao confere / mais de um') : 'nenhum lancamento a pagar com essa chave'});
+    let txt; try{ txt=await pdfTextoDeUrl(publicUrl(path)+'?t='+Date.now()); }catch(e){ continue; }
+    for(const rc of comprovExtrairVarios(txt)){
+      const r=comprovAvaliar(rc, path);
+      if(r==='pulado') continue;
+      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); baixados++; }catch(e){ pend.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); } }
+      else pend.push(r.item);
     }
   }
   comprovantesPendentes=pend;
@@ -1732,37 +1756,28 @@ async function carregarComprovanteLocal(fileList){
   let baixados=0, pend=0;
   for(const file of files){
     let txt=''; try{ txt=await pdfTextoCompleto(file); }catch(e){}
-    const rc=comprovExtrair(txt);
+    const recs=comprovExtrairVarios(txt);
     let path=null; try{ path=await uploadAnexo(file,'inbox'); }catch(e){ toast('Falha ao enviar: '+e.message,true); continue; }
-    const cand=rc.chave? comprovCandidatos(rc):[];
-    const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
-    if(exato.length===1){ try{ await comprovBaixar(exato[0], path, rc.dataISO); baixados++; }catch(e){ comprovantesPendentes.push({path,rc,cand,motivo:'erro ao baixar'}); pend++; } }
-    else { comprovantesPendentes.push({path, rc, cand, motivo: cand.length? (rc.valor==null?'não li o valor - confirme':'valor nao confere / mais de um') : 'nenhum lancamento a pagar com essa chave'}); pend++; }
+    for(const rc of recs){
+      const r=comprovAvaliar(rc, path);
+      if(r==='pulado') continue;
+      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); baixados++; }catch(e){ comprovantesPendentes.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); pend++; } }
+      else { comprovantesPendentes.push(r.item); pend++; }
+    }
   }
   renderLista(); atualizarBadgeComprov();
   const inp=$('comprov-file'); if(inp) inp.value='';
-  if(baixados) toast(`✅ ${baixados} comprovante(s) baixado(s).`);
+  if(baixados) toast(`✅ ${baixados} comprovante(s) baixado(s) automaticamente.`);
   if(pend) abrirComprovResolver();
+  if(!baixados && !pend) toast('Nenhum comprovante lido no arquivo.', true);
 }
 function atualizarBadgeComprov(){
   const b=$('btn-comprov'); if(!b) return; const n=comprovantesPendentes.length;
   if(n>0){ b.style.display='inline-flex'; b.innerHTML='<span class="vh-dot"></span>📎 '+n+' comprovante'+(n>1?'s':'')+' p/ conferir'; }
   else { b.style.display='none'; }
 }
-let _comprovDescartados=(()=>{ try{ return new Set(JSON.parse(localStorage.getItem('foco_comprov_descartados')||'[]')); }catch(e){ return new Set(); } })();
-function _salvaComprovDescartados(){ try{ localStorage.setItem('foco_comprov_descartados', JSON.stringify([..._comprovDescartados])); }catch(e){} }
-async function _apagaInbox(path){ try{ await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}}); }catch(e){} }
-async function comprovDescartar(i){
-  const p=comprovantesPendentes[i]; if(!p) return;
-  _comprovDescartados.add(p.path); _salvaComprovDescartados();
-  _apagaInbox(p.path);
-  comprovantesPendentes.splice(i,1); atualizarBadgeComprov(); abrirComprovResolver();
-}
-async function comprovDescartarTodos(){
-  const paths=comprovantesPendentes.map(p=>p.path);
-  paths.forEach(pt=>{ _comprovDescartados.add(pt); _apagaInbox(pt); }); _salvaComprovDescartados();
-  comprovantesPendentes=[]; atualizarBadgeComprov(); abrirComprovResolver();
-}
+function comprovDescartar(i){ const p=comprovantesPendentes[i]; if(!p) return; _marcaDescartado(p.key||comprovRecKey(p.rc)); comprovantesPendentes.splice(i,1); atualizarBadgeComprov(); abrirComprovResolver(); }
+function comprovDescartarTodos(){ comprovantesPendentes.forEach(p=>_marcaDescartado(p.key||comprovRecKey(p.rc))); comprovantesPendentes=[]; atualizarBadgeComprov(); abrirComprovResolver(); }
 function abrirComprovResolver(){
   const body=$('comprov-body'); if(!body) return;
   if(!comprovantesPendentes.length){ body.innerHTML='<p class="pix-msg">Nenhum comprovante pendente. 🎉</p>'; }
@@ -1781,7 +1796,7 @@ function abrirComprovResolver(){
 function fecharComprovResolver(){ $('comprovOverlay').style.display='none'; }
 async function comprovVincular(i, id){
   const p=comprovantesPendentes[i]; const d=despesas.find(x=>x.id===id); if(!p||!d) return;
-  try{ await comprovBaixar(d, p.path, p.rc.dataISO); comprovantesPendentes.splice(i,1); renderLista(); atualizarBadgeComprov(); abrirComprovResolver(); toast('Comprovante vinculado e baixado.'); }
+  try{ await comprovBaixar(d, p.path, p.rc.dataISO); _marcaFeito(p.key||comprovRecKey(p.rc)); comprovantesPendentes.splice(i,1); renderLista(); atualizarBadgeComprov(); abrirComprovResolver(); toast('Comprovante vinculado e baixado.'); }
   catch(e){ toast('Erro: '+e.message,true); }
 }
 
