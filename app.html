@@ -1710,7 +1710,7 @@ async function processarComprovantes(){
   const claimed=new Set(despesas.map(d=>d.comprovante).filter(Boolean));
   const pend=[]; let baixados=0;
   for(const path of paths){
-    if(claimed.has(path)) continue;
+    if(claimed.has(path) || _comprovDescartados.has(path)) continue;
     let txt; try{ txt=await pdfTextoDeUrl(publicUrl(path)); }catch(e){ continue; }
     const rc=comprovExtrair(txt);
     const cand=rc.chave? comprovCandidatos(rc) : [];
@@ -1749,17 +1749,31 @@ function atualizarBadgeComprov(){
   if(n>0){ b.style.display='inline-flex'; b.innerHTML='<span class="vh-dot"></span>📎 '+n+' comprovante'+(n>1?'s':'')+' p/ conferir'; }
   else { b.style.display='none'; }
 }
+let _comprovDescartados=(()=>{ try{ return new Set(JSON.parse(localStorage.getItem('foco_comprov_descartados')||'[]')); }catch(e){ return new Set(); } })();
+function _salvaComprovDescartados(){ try{ localStorage.setItem('foco_comprov_descartados', JSON.stringify([..._comprovDescartados])); }catch(e){} }
+async function _apagaInbox(path){ try{ await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}}); }catch(e){} }
+async function comprovDescartar(i){
+  const p=comprovantesPendentes[i]; if(!p) return;
+  _comprovDescartados.add(p.path); _salvaComprovDescartados();
+  _apagaInbox(p.path);
+  comprovantesPendentes.splice(i,1); atualizarBadgeComprov(); abrirComprovResolver();
+}
+async function comprovDescartarTodos(){
+  const paths=comprovantesPendentes.map(p=>p.path);
+  paths.forEach(pt=>{ _comprovDescartados.add(pt); _apagaInbox(pt); }); _salvaComprovDescartados();
+  comprovantesPendentes=[]; atualizarBadgeComprov(); abrirComprovResolver();
+}
 function abrirComprovResolver(){
   const body=$('comprov-body'); if(!body) return;
   if(!comprovantesPendentes.length){ body.innerHTML='<p class="pix-msg">Nenhum comprovante pendente. 🎉</p>'; }
-  else body.innerHTML=comprovantesPendentes.map((p,i)=>{
+  else body.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button type="button" class="btn btn-ghost btn-sm" onclick="comprovDescartarTodos()">🗑 Descartar todos</button></div>`+comprovantesPendentes.map((p,i)=>{
     const rc=p.rc; const cands=(p.cand||[]);
-    const btns=cands.length? cands.map(d=>`<button type="button" class="btn btn-primary btn-sm" onclick="comprovVincular(${i},${d.id})">Baixar → ${esc(d.fornecedor||'')} · ${money(d.valor)}</button>`).join(' ')
+    const baixar=cands.length? cands.map(d=>`<button type="button" class="btn btn-primary btn-sm" onclick="comprovVincular(${i},${d.id})">Baixar → ${esc(d.fornecedor||'')} · ${money(d.valor)}</button>`).join(' ')
       : '<span class="pix-msg">Nenhum lançamento "a pagar" com essa chave.</span>';
     return `<div class="comprov-item">
       <div class="comprov-meta"><b>${money(rc.valor||0)}</b> · ${rc.dataISO? fdate(rc.dataISO):'sem data'} · chave <b>${esc(rc.chave||'—')}</b> · <a href="${publicUrl(p.path)}" target="_blank">ver PDF</a></div>
       <div class="pix-msg">${esc(p.motivo)}</div>
-      <div class="cb-acts">${btns}</div>
+      <div class="cb-acts">${baixar} <button type="button" class="btn btn-ghost btn-sm" onclick="comprovDescartar(${i})">Descartar</button></div>
     </div>`;
   }).join('');
   $('comprovOverlay').style.display='flex';
