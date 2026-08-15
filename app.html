@@ -462,6 +462,7 @@ td:last-child{white-space:nowrap;}
         <button id="btn-vence-amanha" class="btn-vence-amanha" onclick="filtrarVenceAmanha()" style="display:none;"></button>
         <button id="btn-comprov" class="btn-comprov" onclick="abrirComprovResolver()" style="display:none;"></button>
         <button id="btn-upcomprov" class="btn-upcomprov" onclick="document.getElementById('comprov-file').click()">📎 Carregar comprovante</button>
+        <button id="btn-verif-comprov" class="btn-upcomprov" onclick="verificarEnviosComprov()">🔄 Verificar envios</button>
         <input type="file" id="comprov-file" accept="application/pdf" multiple style="display:none" onchange="carregarComprovanteLocal(this.files)">
       </div>
       <p id="painel-sub">—</p>
@@ -1770,6 +1771,22 @@ async function carregarComprovanteLocal(fileList){
   if(baixados) toast(`✅ ${baixados} comprovante(s) baixado(s) automaticamente.`);
   if(pend) abrirComprovResolver();
   if(!baixados && !pend) toast('Nenhum comprovante lido no arquivo.', true);
+}
+async function verificarEnviosComprov(){
+  toast('Verificando caixa de entrada…');
+  _comprovDescartados=new Set(); _lsSet('foco_comprov_descartados',_comprovDescartados);
+  let paths;
+  try{ paths=await comprovListarInbox(); }
+  catch(e){ alert('❌ Não consegui LISTAR a caixa de entrada do Supabase.\n\nQuase sempre é a permissão de listagem (policy de SELECT no bucket comprovantes).\n\nDetalhe técnico: '+e.message); return; }
+  if(!paths.length){ alert('A caixa de entrada está VAZIA.\n\nIsso significa que os envios do Atalho não estão chegando na pasta inbox/ do bucket comprovantes (ou o Atalho está enviando para outro lugar).'); atualizarBadgeComprov(); return; }
+  const nomes=paths.map(p=>p.replace('inbox/','')).join('\n• ');
+  const pagosAntes=despesas.filter(d=>d.status==='PAGO').length;
+  await processarComprovantes();
+  const pagosDepois=despesas.filter(d=>d.status==='PAGO').length;
+  const baixou=pagosDepois-pagosAntes;
+  const pend=comprovantesPendentes.length;
+  alert(`Encontrei ${paths.length} arquivo(s) na caixa:\n• ${nomes}\n\n✅ Baixados agora: ${baixou}\n📎 Para conferir: ${pend}`);
+  if(pend) abrirComprovResolver();
 }
 function atualizarBadgeComprov(){
   const b=$('btn-comprov'); if(!b) return; const n=comprovantesPendentes.length;
