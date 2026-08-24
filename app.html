@@ -1693,7 +1693,11 @@ function comprovExtrair(txt){
   const mChave=t.match(/Chave Pix\s*([+\w.\-@]+)/i);
   const chave=mChave? mChave[1] : null;
   const mId=t.match(/\b(E\d{20,})\b/);
-  return {valor, dataISO, chave, idPix: mId?mId[1]:null};
+  const mNome=t.match(/Pix Enviado\s+([A-Za-zÀ-úÇç][A-Za-zÀ-úÇç .]+?)\s+(?:Foco|CPF|CNPJ|Ltda|LTDA|ME\b)/i);
+  const nome=mNome? mNome[1].trim() : null;
+  const mCpf=t.match(/CPF\s*([\d.*\u2022\-]{7,18})/i);
+  const cpf=mCpf? mCpf[1] : null;
+  return {valor, dataISO, chave, idPix: mId?mId[1]:null, nome, cpf};
 }
 function comprovExtrairVarios(txt){
   const t=String(txt||'').replace(/\s+/g,' ');
@@ -1717,8 +1721,18 @@ async function comprovListarInbox(){
   const arr=await r.json();
   return (arr||[]).filter(o=>o&&o.name&&o.id&&/\.pdf$/i.test(o.name)).map(o=>'inbox/'+o.name);
 }
+function comprovNorm(x){ return String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim(); }
 function comprovCandidatos(rc){
-  return despesas.filter(d=> d.status==='A_PAGAR' && String(d.forma_pagamento||'').toUpperCase().includes('PIX') && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave));
+  const nomeR=comprovNorm(rc.nome);
+  const cpfR=String(rc.cpf||'').replace(/\D/g,'');
+  return despesas.filter(d=>{
+    if(d.status!=='A_PAGAR') return false;
+    if(!String(d.forma_pagamento||'').toUpperCase().includes('PIX')) return false;
+    if(rc.chave && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave)) return true;       // 1) chave
+    if(nomeR && comprovNorm(d.fornecedor)===nomeR) return true;                                 // 2) nome do recebedor
+    if(cpfR.length>=6 && String(d.cnpj||'').replace(/\D/g,'').includes(cpfR)) return true;      // 3) CPF (dígitos visíveis)
+    return false;
+  });
 }
 async function comprovBaixar(d, path, dataISO){
   const conta=d.conta||'LOG BB'; const dt=dataISO||vencHojeISO();
@@ -1728,7 +1742,7 @@ async function comprovBaixar(d, path, dataISO){
 function comprovAvaliar(rc, path, destino){
   const key=comprovRecKey(rc);
   if(_comprovFeitos.has(key)) return 'pulado';
-  const cand=rc.chave? comprovCandidatos(rc):[];
+  const cand=comprovCandidatos(rc);
   const exato=cand.filter(d=> rc.valor!=null && Math.abs((+d.valor||0)-rc.valor)<0.005);
   if(exato.length===1){ if(_comprovDescartados.has(key)){ _comprovDescartados.delete(key); _lsSet('foco_comprov_descartados',_comprovDescartados); } return {tipo:'baixar', d:exato[0], key, path, rc}; }
   if(_comprovDescartados.has(key)) return 'pulado';
@@ -1802,7 +1816,7 @@ function abrirComprovResolver(){
     const baixar=cands.length? cands.map(d=>`<button type="button" class="btn btn-primary btn-sm" onclick="comprovVincular(${i},${d.id})">Baixar → ${esc(d.fornecedor||'')} · ${money(d.valor)}</button>`).join(' ')
       : '<span class="pix-msg">Nenhum lançamento "a pagar" com essa chave.</span>';
     return `<div class="comprov-item">
-      <div class="comprov-meta"><b>${money(rc.valor||0)}</b> · ${rc.dataISO? fdate(rc.dataISO):'sem data'} · chave <b>${esc(rc.chave||'—')}</b> · <a href="${publicUrl(p.path)}" target="_blank">ver PDF</a></div>
+      <div class="comprov-meta"><b>${money(rc.valor||0)}</b> · ${rc.dataISO? fdate(rc.dataISO):'sem data'} · ${rc.chave?`chave <b>${esc(rc.chave)}</b>`:`recebedor <b>${esc(rc.nome||'—')}</b>`} · <a href="${publicUrl(p.path)}" target="_blank">ver PDF</a></div>
       <div class="pix-msg">${esc(p.motivo)}</div>
       <div class="cb-acts">${baixar} <button type="button" class="btn btn-ghost btn-sm" onclick="comprovDescartar(${i})">Descartar</button></div>
     </div>`;
