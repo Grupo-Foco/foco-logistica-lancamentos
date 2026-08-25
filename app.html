@@ -1750,13 +1750,15 @@ function comprovAvaliar(rc, path, destino){
 }
 async function processarComprovantes(){
   let paths; try{ paths=await comprovListarInbox(); }catch(e){ return; }
+  const jaVinculados=new Set(despesas.map(d=>d.comprovante).filter(Boolean));
   const pend=[]; let baixados=0;
   for(const path of paths){
+    if(jaVinculados.has(path)) continue;
     let txt; try{ txt=await pdfTextoDeUrl(publicUrl(path)+'?t='+Date.now()); }catch(e){ continue; }
     for(const rc of comprovExtrairVarios(txt)){
       const r=comprovAvaliar(rc, path);
       if(r==='pulado') continue;
-      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); baixados++; }catch(e){ pend.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); } }
+      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); jaVinculados.add(path); baixados++; }catch(e){ pend.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); } }
       else pend.push(r.item);
     }
   }
@@ -1775,7 +1777,7 @@ async function carregarComprovanteLocal(fileList){
     for(const rc of recs){
       const r=comprovAvaliar(rc, path);
       if(r==='pulado') continue;
-      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); baixados++; }catch(e){ comprovantesPendentes.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); pend++; } }
+      if(r.tipo==='baixar'){ try{ await comprovBaixar(r.d, path, rc.dataISO); _marcaFeito(r.key); jaVinculados.add(path); baixados++; }catch(e){ comprovantesPendentes.push({path,rc,key:r.key,cand:[],motivo:'erro ao baixar'}); pend++; } }
       else { comprovantesPendentes.push(r.item); pend++; }
     }
   }
@@ -1806,8 +1808,9 @@ function atualizarBadgeComprov(){
   if(n>0){ b.style.display='inline-flex'; b.innerHTML='<span class="vh-dot"></span>📎 '+n+' comprovante'+(n>1?'s':'')+' p/ conferir'; }
   else { b.style.display='none'; }
 }
-function comprovDescartar(i){ const p=comprovantesPendentes[i]; if(!p) return; _marcaDescartado(p.key||comprovRecKey(p.rc)); comprovantesPendentes.splice(i,1); atualizarBadgeComprov(); abrirComprovResolver(); }
-function comprovDescartarTodos(){ comprovantesPendentes.forEach(p=>_marcaDescartado(p.key||comprovRecKey(p.rc))); comprovantesPendentes=[]; atualizarBadgeComprov(); abrirComprovResolver(); }
+async function _apagaInbox(path){ try{ await fetch(`${SB_URL}/storage/v1/object/comprovantes/${path}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}}); }catch(e){} }
+function comprovDescartar(i){ const p=comprovantesPendentes[i]; if(!p) return; _marcaDescartado(p.key||comprovRecKey(p.rc)); _apagaInbox(p.path); comprovantesPendentes.splice(i,1); atualizarBadgeComprov(); abrirComprovResolver(); }
+function comprovDescartarTodos(){ comprovantesPendentes.forEach(p=>{ _marcaDescartado(p.key||comprovRecKey(p.rc)); _apagaInbox(p.path); }); comprovantesPendentes=[]; atualizarBadgeComprov(); abrirComprovResolver(); }
 function abrirComprovResolver(){
   const body=$('comprov-body'); if(!body) return;
   if(!comprovantesPendentes.length){ body.innerHTML='<p class="pix-msg">Nenhum comprovante pendente. 🎉</p>'; }
