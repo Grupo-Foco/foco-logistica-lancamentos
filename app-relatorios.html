@@ -217,7 +217,7 @@ function renderDetalhado(){
   $('rep-foot').innerHTML=`<tr><td colspan="4">TOTAL — ${list.length} lançamento(s)</td><td class="right mono">${money(total)}</td><td colspan="3"></td></tr>`;
   exportData={ nome:'despesas_detalhado',
     head:['Vencimento','Fornecedor','Documento','Categoria','Placa','Motorista','Valor','Juros','Status','Pagamento','Conta','Forma','Observação'],
-    rows:list.map(d=>[fdate(d.vencimento),d.fornecedor,d.documento,d.tipo_despesa,d.placa,d.motorista,num(d.valor),num(d.juros),d.status,fdate(d.pagamento),d.conta,d.forma_pagamento,d.historico]) };
+    rows:list.map(d=>[fdate(d.vencimento),d.fornecedor,d.documento,d.tipo_despesa,d.placa,d.motorista,(+d.valor||0),(+d.juros||0),d.status,fdate(d.pagamento),d.conta,d.forma_pagamento,d.historico]), money:[6,7] };
 }
 
 /* -------- Por categoria -------- */
@@ -237,7 +237,7 @@ function renderCategoria(){
     <td class="right mono">${money(o.v)}</td><td class="right mono">${total?(o.v/total*100).toFixed(1):'0'}%</td></tr>`).join('') : `<tr><td colspan="4"><div class="empty">Sem dados.</div></td></tr>`;
   $('rep-foot').innerHTML=`<tr><td>TOTAL</td><td class="right mono">${list.length}</td><td class="right mono">${money(total)}</td><td class="right mono">100%</td></tr>`;
   exportData={ nome:'por_categoria', head:['Categoria','Lançamentos','Total','% do total'],
-    rows:rows.map(([k,o])=>[k,o.n,num(o.v), (total?(o.v/total*100).toFixed(1):'0')+'%']) };
+    rows:rows.map(([k,o])=>[k,o.n,(+o.v||0), (total?(o.v/total*100).toFixed(1):'0')+'%']), money:[2] };
 }
 
 /* -------- Por caminhão -------- */
@@ -259,7 +259,7 @@ function renderCaminhao(){
     <td class="right mono">${money(o.v)}</td><td class="right mono">${total?(o.v/total*100).toFixed(1):'0'}%</td></tr>`).join('') : `<tr><td colspan="4"><div class="empty">Sem dados.</div></td></tr>`;
   $('rep-foot').innerHTML=`<tr><td>TOTAL</td><td class="right mono">${list.length}</td><td class="right mono">${money(total)}</td><td class="right mono">100%</td></tr>`;
   exportData={ nome:'por_caminhao', head:['Placa','Lançamentos','Total gasto','% do total'],
-    rows:rows.map(([k,o])=>[k,o.n,num(o.v),(total?(o.v/total*100).toFixed(1):'0')+'%']) };
+    rows:rows.map(([k,o])=>[k,o.n,(+o.v||0),(total?(o.v/total*100).toFixed(1):'0')+'%']), money:[2] };
 }
 
 /* -------- Balanço (despesa × receita) por caminhão -------- */
@@ -286,15 +286,17 @@ function renderBalanco(){
     <td class="right mono ${r.res>=0?'pos':'neg'}">${money(r.res)} ${r.res>=0?'▲':'▼'}</td></tr>`).join('') : `<tr><td colspan="5"><div class="empty">Sem dados no período. (As receitas vêm dos fretes cadastrados em Receitas.)</div></td></tr>`;
   $('rep-foot').innerHTML=`<tr><td>TOTAL</td><td></td><td class="right mono">${money(tRec)}</td><td class="right mono">${money(tDesp)}</td><td class="right mono ${tRes>=0?'pos':'neg'}">${money(tRes)}</td></tr>`;
   exportData={ nome:'balanco_caminhao', head:['Placa','Fretes','Receita','Despesa','Resultado'],
-    rows:rows.map(r=>[r.p,r.nf,num(r.rec),num(r.desp),num(r.res)]) };
+    rows:rows.map(r=>[r.p,r.nf,r.rec,r.desp,r.res]), money:[2,3,4], signCol:4 };
 }
 
 /* -------- Exportar CSV -------- */
 function num(v){ return (Number(v)||0).toFixed(2).replace('.',','); }
+function fmtMoney(v){ return money(Number(v)||0); }
+function _isMoney(i){ return Array.isArray(exportData.money) && exportData.money.includes(i); }
 function csvCell(v){ const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[";\n]/.test(s)?`"${s}"`:s; }
 function exportar(){
   if(!exportData.rows.length){ toast('Nada para exportar.',true); return; }
-  const linhas=[exportData.head.join(';'), ...exportData.rows.map(r=>r.map(csvCell).join(';'))];
+  const linhas=[exportData.head.join(';'), ...exportData.rows.map(r=>r.map((c,i)=> _isMoney(i)? fmtMoney(c) : c).map(csvCell).join(';'))];
   const csv='\uFEFF'+linhas.join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
@@ -312,6 +314,8 @@ function exportarXLSX(){
   if(typeof XLSX==='undefined'){ toast('Biblioteca do Excel não carregou (verifique a conexão).',true); return; }
   const aoa=[exportData.head, ...exportData.rows.map(r=>r.map(brToNum))];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(Array.isArray(exportData.money) && ws['!ref']){ const range=XLSX.utils.decode_range(ws['!ref']);
+    for(let R=1; R<=range.e.r; R++){ for(const C of exportData.money){ const ref=XLSX.utils.encode_cell({r:R,c:C}); const cell=ws[ref]; if(cell && cell.t==='n'){ cell.z='R$ #,##0.00'; } } } }
   ws['!cols']=exportData.head.map(h=>({wch:Math.max(12,String(h).length+2)}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Relatório');
   XLSX.writeFile(wb, `${exportData.nome}_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -327,7 +331,16 @@ function exportarPDF(){
   doc.setFontSize(10); doc.setTextColor(120); doc.text(sub||'', 40, 58);
   doc.autoTable({ startY:72, head:[exportData.head], body:exportData.rows,
     styles:{fontSize:8, cellPadding:4}, headStyles:{fillColor:[39,64,31]},
-    alternateRowStyles:{fillColor:[243,242,234]} });
+    alternateRowStyles:{fillColor:[243,242,234]},
+    didParseCell:function(data){
+      if(data.section!=='body') return;
+      if(_isMoney(data.column.index)){ data.cell.text=[fmtMoney(data.cell.raw)]; }
+      if(exportData.signCol!=null){
+        const res=Number(data.row.raw[exportData.signCol])||0;
+        data.cell.styles.fillColor = res>=0 ? [230,244,234] : [250,232,230];
+        if(data.column.index===exportData.signCol){ data.cell.styles.textColor = res>=0?[31,120,60]:[178,40,30]; data.cell.styles.fontStyle='bold'; }
+      }
+    } });
   doc.save(`${exportData.nome}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast('PDF exportado.');
 }
