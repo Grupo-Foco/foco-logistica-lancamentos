@@ -163,11 +163,9 @@ function filtros(){ return {de:$('f-de').value, ate:$('f-ate').value, placa:$('f
 function inPer(dtISO, de, ate){ if(!dtISO) return !de&&!ate?true:false; const x=String(dtISO).slice(0,10); return (!de||x>=de)&&(!ate||x<=ate); }
 function freteNoPer(f, de, ate){
   if(!de && !ate) return true;
-  const ps = parcelas.filter(p=>p.frete_id===f.id);
-  const datas=[f.data_carregamento, f.data_descarregamento, ...ps.flatMap(p=>[p.previsao,p.data_recebimento])]
-    .filter(Boolean).map(x=>String(x).slice(0,10));
-  if(!datas.length) datas.push(String(f.created_at||'').slice(0,10));
-  return datas.some(x => x && (!de||x>=de) && (!ate||x<=ate));
+  // Data de referência ÚNICA por frete (competência = carregamento), para os períodos serem aditivos.
+  const dt = String(f.data_carregamento || f.data_descarregamento || f.created_at || '').slice(0,10);
+  return !!dt && (!de||dt>=de) && (!ate||dt<=ate);
 }
 function despFiltradas(){
   const {de,ate,placa,cat}=filtros();
