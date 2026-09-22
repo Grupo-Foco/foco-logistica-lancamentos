@@ -271,6 +271,7 @@ td:last-child{white-space:nowrap;}
 .comprov-meta a{color:var(--verde);}
 .btn-upcomprov{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.03em;padding:8px 15px;border-radius:999px;border:1.5px solid var(--verde-mid);background:var(--branco);color:var(--verde);cursor:pointer;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:transform .15s,background .2s;}
 .btn-upcomprov:hover{background:var(--creme);transform:translateY(-1px);}
+.cb-aviso{background:#fdecea;border:1.5px solid #e74c3c;color:#a5261a;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;line-height:1.4;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-family:'DM Sans',sans-serif;}
 </style>
 </head>
 <body>
@@ -709,7 +710,7 @@ function verDoc(kind,id){
   const d=despesas.find(x=>x.id===id); if(!d) return;
   const paths=anexoArr(kind==='boleto'?d.boleto:d.nf); if(!paths.length) return;
   const rot = kind==='boleto'?'Boleto':'NF';
-  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p),isBoleto:(kind==='boleto'),linha:(kind==='boleto'?(d.codigo_barras||null):null)}));
+  viewerList=paths.map((p,i)=>({url:publicUrl(p),nome:rot+(paths.length>1?' '+(i+1):''),isImg:isImgUrl(p),isBoleto:(kind==='boleto'),linha:(kind==='boleto'?(d.codigo_barras||null):null),venc:(kind==='boleto'?d.vencimento:null),valor:(kind==='boleto'?(+d.valor||0):null)}));
   showViewerAt(0);
 }
 function verAnexo(url,nome,isImg,isBoleto,linha){ viewerList=[{url,nome,isImg,isBoleto:!!isBoleto,linha:linha||null}]; showViewerAt(0); }
@@ -720,9 +721,13 @@ function showViewerAt(i){
   $('viewer-title').textContent=it.nome + (viewerList.length>1?` (${viewerIdx+1}/${viewerList.length})`:'');
   $('viewer-download').href=it.url;
   const _doc = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
-  const _band = (it.linha && cbLinhaValida(it.linha)) ? barcodeBandHTML(it.linha) : '';
+  const _band = (it.linha && cbLinhaValida(it.linha)) ? barcodeBandHTML(it.linha, it.venc, it.valor) : '';
   $('viewer-body').innerHTML = _band ? `<div class="cb-view-wrap">${_band}${_doc}</div>` : _doc;
-  if(_band) desenharBarcode('cb-svg-view', it.linha);
+  if(_band){ desenharBarcode('cb-svg-view', it.linha);
+    const _p=cbParse(it.linha); const _vISO=cbVencISO(_p&&_p.venc);
+    const _dif = (it.venc && _vISO && _vISO!==String(it.venc).slice(0,10)) || (it.valor!=null && _p && Math.abs((_p.valor||0)-(+it.valor||0))>0.005);
+    if(_dif && it.isBoleto && !it.isImg) viewerAutoLer(it, viewerIdx);
+  }
   else if(it.isBoleto) viewerAutoLer(it, viewerIdx);
   $('viewer-nav').style.display = viewerList.length>1 ? 'inline-flex' : 'none';
   $('viewer').classList.add('show');
@@ -992,6 +997,7 @@ async function salvar(){
             let v = j===rt.length-1 ? +(alvo-acc).toFixed(2) : +(x.valor*frac).toFixed(2);
             acc=+(acc+v).toFixed(2);
             rows.push({...base, placa:x.placa, valor:v, vencimento:p.vencimento||venc, cg,
+                       codigo_barras: cbLinhaParaVenc(p.vencimento||venc),
                        documento: base.documento? base.documento+` (${i+1}/${eds.length})`: null});
           });
         });
@@ -1012,6 +1018,7 @@ async function salvar(){
         const cg='CG'+Date.now();
         const eds=lerParcelasEditor();
         eds.forEach((p,i)=>rows.push({...base, vencimento:p.vencimento||venc, valor:p.valor, cg,
+                     codigo_barras: cbLinhaParaVenc(p.vencimento||venc),
                      documento: base.documento? base.documento+` (${i+1}/${eds.length})`: null}));
       }
       await sb('despesas',{method:'POST',body:JSON.stringify(rows)});
@@ -1067,7 +1074,7 @@ function renderLista(){
   $('painel-sub').textContent=`${list.length} lançamento(s)`;
   const canDel=hasPerm('excluir');
   const tb=$('lista-tbody');
-  if(!list.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; if($('sel-bar'))$('sel-bar').style.display='none'; if($('chk-all')){$('chk-all').checked=false;$('chk-all').indeterminate=false;} return; }
+  if(!list.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>`; if($('sel-bar'))$('sel-bar').style.display='none'; if($('chk-all')){$('chk-all').checked=false;$('chk-all').indeterminate=false;} atualizarBotoesVenc(); return; }
   tb.innerHTML=list.map(d=>{
     const nb=anexoArr(d.boleto).length, nn=anexoArr(d.nf).length;
     return `<tr data-id="${d.id}" onclick="rowClick(event,${d.id})" style="cursor:pointer">
@@ -1434,8 +1441,11 @@ async function lerCodigosDeArquivo(file){
 }
 
 function cbEscolherParcela(parcelas){
+  // parcela "atual": a mais antiga que esteja a vencer OU vencida há no máximo 2 dias
+  // (cobre o caso de vencer no sábado e só pagar na segunda)
   const h=new Date(); const hj=Date.UTC(h.getFullYear(),h.getMonth(),h.getDate());
-  let idx=parcelas.findIndex(p=>p.venc && p.venc.getTime()>=hj); if(idx<0) idx=parcelas.length-1; return idx;
+  const limite=hj-2*86400000;
+  let idx=parcelas.findIndex(p=>p.venc && p.venc.getTime()>=limite); if(idx<0) idx=parcelas.length-1; return idx;
 }
 function cbOrdena(linhas){ return linhas.map(cbParse).filter(Boolean).sort((a,b)=>((a.venc&&a.venc.getTime())||0)-((b.venc&&b.venc.getTime())||0)); }
 
@@ -1501,10 +1511,32 @@ async function copiarLinha(linha){
   catch(e){ const t=document.createElement('textarea'); t.value=l; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast('Linha digitável copiada.'); }catch(_){ toast('Copie manualmente.',true); } t.remove(); }
 }
 
-function barcodeBandHTML(linha){
+function cbVencISO(dt){ if(!(dt instanceof Date)||isNaN(dt)) return null; const p=n=>String(n).padStart(2,'0'); return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth()+1)}-${p(dt.getUTCDate())}`; }
+function cbLinhaParaVenc(vencISO){
+  if(vencISO && Array.isArray(cbParcelas) && cbParcelas.length){
+    const alvo=String(vencISO).slice(0,10);
+    const m=cbParcelas.find(p=>p && p.venc && cbVencISO(p.venc)===alvo);
+    if(m) return m.linha;
+  }
+  return pendingCodigoBarras||null;
+}
+function cbEscolherParaLancamento(parcelas, venc, valor){
+  if(venc){ const alvo=String(venc).slice(0,10); const i=parcelas.findIndex(p=>cbVencISO(p.venc)===alvo); if(i>=0) return i; }
+  if(valor!=null && valor!==''){ const i=parcelas.findIndex(p=>Math.abs((p.valor||0)-(+valor||0))<0.005); if(i>=0) return i; }
+  return cbEscolherParcela(parcelas);
+}
+function viewerCorrigir(){ const it=viewerList[viewerIdx]; if(it) viewerManual(it, viewerIdx); }
+function barcodeBandHTML(linha, expVenc, expValor){
   const bc=cbLinhaParaBarcode(linha); if(!bc) return '';
   const p=cbParse(linha);
-  return `<div class="cb-band">
+  let aviso='';
+  if(p){
+    const vISO=cbVencISO(p.venc);
+    const vencDif = expVenc && vISO && vISO!==String(expVenc).slice(0,10);
+    const valDif = (expValor!=null && expValor!=='') && Math.abs((p.valor||0)-(+expValor||0))>0.005;
+    if(vencDif||valDif) aviso=`<div class="cb-aviso">⚠ Atenção: o código lido (venc ${cbFmtData(p.venc)} · ${money(p.valor)}) NÃO confere com o lançamento (venc ${expVenc?fdate(expVenc):'—'} · ${expValor!=null?money(expValor):'—'}). Confira o boleto antes de pagar. <button type="button" class="btn btn-ghost btn-sm" onclick="viewerCorrigir()">✎ Colar linha correta</button></div>`;
+  }
+  return `<div class="cb-band">${aviso}
     <div class="cb-band-top">
       <span class="cb-band-t">🏦 Código de barras — venc ${cbFmtData(p&&p.venc)} · ${money(p?p.valor:0)}</span>
       <button class="btn btn-primary btn-sm" onclick="copiarLinha('${cbDigits(linha)}')">⧉ Copiar linha digitável</button>
@@ -1532,11 +1564,11 @@ async function viewerAutoLer(it, idx){
       try{ linhas=await lerCodigosDeUrlPdf(it.url); }catch(e){}
     }
     if(!linhas.length){ done(); viewerManual(it, idx); return; }
-    const parc=cbOrdena(linhas); const pick=parc[cbEscolherParcela(parc)]; if(!pick){ done(); return; }
+    const parc=cbOrdena(linhas); const pick=parc[cbEscolherParaLancamento(parc, it.venc, it.valor)]; if(!pick){ done(); return; }
     if(viewerIdx!==idx || !$('viewer').classList.contains('show')){ done(); return; }
     it.linha=pick.linha;
     const doc = it.isImg ? `<img src="${it.url}" alt="">` : `<iframe src="${it.url}"></iframe>`;
-    bodyEl.innerHTML=`<div class="cb-view-wrap">${barcodeBandHTML(pick.linha)}${doc}</div>`;
+    bodyEl.innerHTML=`<div class="cb-view-wrap">${barcodeBandHTML(pick.linha, it.venc, it.valor)}${doc}</div>`;
     desenharBarcode('cb-svg-view', pick.linha);
   }catch(e){ done(); }
 }
