@@ -471,16 +471,17 @@ td:last-child{white-space:nowrap;}
     <div class="kpis" id="kpis"></div>
 
     <div class="toolbar">
-      <div class="field"><label>Buscar</label><input id="flt-busca" placeholder="fornecedor, documento…" oninput="renderLista()"></div>
-      <div class="field"><label>Status</label><select id="flt-status" onchange="renderLista()"><option value="">Todos</option><option value="A_PAGAR">A pagar</option><option value="PAGO">Pago</option></select></div>
-      <div class="field"><label>Placa</label><select id="flt-placa" onchange="renderLista()"><option value="">Todas</option></select></div>
-      <div class="field"><label>Tipo</label><select id="flt-tipo" onchange="renderLista()"><option value="">Todos</option></select></div>
-      <div class="field"><label>Forma</label><select id="flt-forma" onchange="renderLista()"><option value="">Todas</option></select></div>
-      <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="renderLista()"></div>
-      <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="renderLista()"></div>
+      <div class="field"><label>Buscar</label><input id="flt-busca" placeholder="fornecedor, documento…" oninput="aplicarFiltrosDebounced()"></div>
+      <div class="field"><label>Status</label><select id="flt-status" onchange="aplicarFiltros()"><option value="">Todos</option><option value="A_PAGAR">A pagar</option><option value="PAGO">Pago</option></select></div>
+      <div class="field"><label>Placa</label><select id="flt-placa" onchange="aplicarFiltros()"><option value="">Todas</option></select></div>
+      <div class="field"><label>Tipo</label><select id="flt-tipo" onchange="aplicarFiltros()"><option value="">Todos</option></select></div>
+      <div class="field"><label>Forma</label><select id="flt-forma" onchange="aplicarFiltros()"><option value="">Todas</option></select></div>
+      <div class="field"><label>Venc. de</label><input type="date" id="flt-de" onchange="aplicarFiltros()"></div>
+      <div class="field"><label>Venc. até</label><input type="date" id="flt-ate" onchange="aplicarFiltros()"></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="limparFiltros()">✕ Limpar</button></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregar()">↺ Atualizar</button></div>
       <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-primary btn-sm" onclick="exportarCSV()">⤓ Exportar</button></div>
+      <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="carregarTudo()" title="Carregar todos os lançamentos (base completa) além do período">⛃ Mostrar tudo</button></div>
     </div>
 
     <div class="sel-bar" id="sel-bar" style="display:none">
@@ -652,6 +653,7 @@ function showLoading(b){ $('loading').classList.toggle('hidden',!b); }
 
 /* ===================== ESTADO ===================== */
 let despesas=[], caminhoesBD=[], fornecedoresBD=[], motoristasBD=[], fretesBD=[];
+let abertosCache=[], janelaCache=[], baseCompleta=false, _buscando=false, _filterTimer=null;
 let editingId=null, editingCg=null, statusAtual='A_PAGAR';
 let pendingBoletos=[], pendingNfs=[], keepBoletos=[], keepNfs=[];
 let sortState={col:'vencimento',dir:'desc'};
@@ -840,14 +842,22 @@ function mascaraDoc(input){
 async function carregar(){
   setSync('sync'); showLoading(true);
   try{
-    const [d,c,f,m,fr] = await Promise.all([
-      sbAll('despesas?order=vencimento.asc'),
+    const [jan,abertos,c,f,m,fr] = await Promise.all([
+      sbAll(`despesas?order=vencimento.asc&vencimento=gte.${janelaIni()}&vencimento=lte.${janelaFim()}`),
+      sbAll('despesas?status=eq.A_PAGAR&order=vencimento.asc'),
       sb('caminhoes?order=placa.asc&limit=2000').catch(()=>[]),
       sbAll('fornecedores?order=nome.asc').catch(()=>[]),
       sb('motoristas?order=nome.asc&limit=2000').catch(()=>[]),
       sb('fretes?select=id,codigo,cliente,placa,valor_total&order=created_at.desc&limit=500').catch(()=>[]),
     ]);
-    despesas=d||[]; caminhoesBD=c||[]; fornecedoresBD=f||[]; motoristasBD=m||[]; fretesBD=fr||[];
+    caminhoesBD=c||[]; fornecedoresBD=f||[]; motoristasBD=m||[]; fretesBD=fr||[];
+    const master=new Map();
+    (abertos||[]).forEach(x=>master.set(x.id,x));
+    (jan||[]).forEach(x=>{ if(!master.has(x.id)) master.set(x.id,x); });
+    janelaCache=(jan||[]).map(x=>master.get(x.id));
+    abertosCache=(abertos||[]).map(x=>master.get(x.id));
+    baseCompleta=false;
+    despesas=_vistaPadrao();
     preencherListas(); renderLista(); setSync('online');
     processarComprovantes();
   }catch(e){ console.error(e); setSync('err'); toast('Erro ao carregar dados.',true); }
@@ -859,13 +869,13 @@ function preencherListas(){
   $('motoristas-list').innerHTML = motoristasBD.map(m=>`<option value="${esc(m.nome)}">`).join('');
   $('f_frete').innerHTML = '<option value="">— sem vínculo —</option>' +
     fretesBD.map(f=>`<option value="${f.id}">${esc(f.codigo||('Frete '+f.id))} · ${esc(f.cliente||'')} · ${esc(f.placa||'')}</option>`).join('');
-  // filtros
-  const placas=[...new Set(despesas.map(d=>d.placa).filter(Boolean))].sort();
+  // filtros (listas completas — NÃO dependem da janela carregada)
+  const placas=[...new Set([...caminhoesBD.map(c=>c.placa), ...despesas.map(d=>d.placa), 'ADMINISTRATIVO','RATEIO'].filter(Boolean))].sort();
   $('flt-placa').innerHTML='<option value="">Todas</option>'+placas.map(p=>`<option>${esc(p)}</option>`).join('');
-  const tipos=[...new Set(despesas.map(d=>d.tipo_despesa).filter(Boolean))].sort();
-  $('flt-tipo').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option>${esc(t)}</option>`).join('');
-  const formas=[...new Set(despesas.map(d=>d.forma_pagamento).filter(Boolean))].sort();
-  if($('flt-forma')) $('flt-forma').innerHTML='<option value="">Todas</option>'+formas.map(f=>`<option>${esc(f)}</option>`).join('');
+  const TIPOS=['COMBUSTÍVEL','PEDÁGIO','MANUTENÇÃO','PEÇAS','SERVIÇOS','BORRACHARIA','PNEU','ALIMENTAÇÃO','HOSPEDAGEM','LAVAGEM','DOCUMENTAÇÃO','SEGURO','CONSÓRCIO','FINANCIAMENTO','SALÁRIO','REEMBOLSO','OUTROS'];
+  $('flt-tipo').innerHTML='<option value="">Todos</option>'+TIPOS.map(t=>`<option>${esc(t)}</option>`).join('');
+  const FORMAS=['PIX','BOLETO','TRANSFERÊNCIA','DINHEIRO','CARTÃO'];
+  if($('flt-forma')) $('flt-forma').innerHTML='<option value="">Todas</option>'+FORMAS.map(f=>`<option>${esc(f)}</option>`).join('');
 }
 
 /* ===================== PARCELAS (editor) ===================== */
@@ -1047,6 +1057,43 @@ async function salvarMotoristaSeNovo(nome){
 }
 
 /* ===================== LISTA / PAINEL ===================== */
+function _ymd(d){ const m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+dd; }
+function janelaIni(){ const d=new Date(); return _ymd(new Date(d.getFullYear(), d.getMonth()-1, 1)); }
+function janelaFim(){ const d=new Date(); return _ymd(new Date(d.getFullYear(), d.getMonth()+2, 0)); }
+function _vistaPadrao(){ const m=new Map(); (janelaCache||[]).forEach(x=>m.set(x.id,x)); (abertosCache||[]).forEach(x=>m.set(x.id,x)); return [...m.values()]; }
+function temFiltroAtivo(){ return ['flt-busca','flt-status','flt-placa','flt-tipo','flt-forma','flt-de','flt-ate'].some(id=>{ const el=$(id); return el&&el.value; }); }
+function montarQueryFiltros(){
+  const parts=['order=vencimento.asc']; const g=id=>{ const el=$(id); return el?el.value:''; };
+  const st=g('flt-status'); if(st) parts.push('status=eq.'+encodeURIComponent(st));
+  const pl=g('flt-placa'); if(pl) parts.push('placa=eq.'+encodeURIComponent(pl));
+  const tp=g('flt-tipo'); if(tp) parts.push('tipo_despesa=eq.'+encodeURIComponent(tp));
+  const fp=g('flt-forma'); if(fp) parts.push('forma_pagamento=eq.'+encodeURIComponent(fp));
+  const de=g('flt-de'); if(de) parts.push('vencimento=gte.'+de);
+  const ate=g('flt-ate'); if(ate) parts.push('vencimento=lte.'+ate);
+  const sraw=(g('flt-busca')||'').trim().replace(/[,()*]/g,' ').trim();
+  if(sraw){ const like=encodeURIComponent('*'+sraw+'*'); parts.push('or=(fornecedor.ilike.'+like+',historico.ilike.'+like+',documento.ilike.'+like+',motorista.ilike.'+like+')'); }
+  return parts.join('&');
+}
+async function aplicarFiltros(){
+  if(baseCompleta){ renderLista(); return; }
+  if(_buscando) return;
+  if(temFiltroAtivo()){
+    _buscando=true; setSync('sync');
+    try{ despesas = await sbAll('despesas?'+montarQueryFiltros()); }
+    catch(e){ toast('Erro na busca: '+e.message,true); despesas=_vistaPadrao(); }
+    _buscando=false; setSync('online');
+  } else { despesas=_vistaPadrao(); }
+  renderLista();
+}
+function aplicarFiltrosDebounced(){ clearTimeout(_filterTimer); _filterTimer=setTimeout(aplicarFiltros,350); }
+async function carregarTudo(){
+  setSync('sync'); showLoading(true);
+  try{ despesas=await sbAll('despesas?order=vencimento.asc'); baseCompleta=true;
+       abertosCache=despesas.filter(d=>d&&d.status==='A_PAGAR'); renderLista();
+       toast('Base completa carregada ('+despesas.length+' lançamentos).'); }
+  catch(e){ toast('Erro ao carregar tudo: '+e.message,true); }
+  finally{ showLoading(false); setSync('online'); }
+}
 function filtrar(){
   const q=($('flt-busca').value||'').toLowerCase(), st=$('flt-status').value, pl=$('flt-placa').value, tp=$('flt-tipo').value;
   const de=$('flt-de').value, ate=$('flt-ate').value, fp=$('flt-forma')?$('flt-forma').value:'';
@@ -1103,9 +1150,9 @@ function renderLista(){
 /* ===================== BOTÕES DE VENCIMENTO ===================== */
 function vencHojeISO(){ const d=new Date(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+dd; }
 function vencAddDiasISO(n){ const d=new Date(); d.setDate(d.getDate()+n); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+dd; }
-function contarVencidos(){ if(!Array.isArray(despesas)) return 0; const hoje=vencHojeISO(); return despesas.filter(d=>{ const v=(d&&d.vencimento||'').substring(0,10); return d && d.status==='A_PAGAR' && v && v<hoje; }).length; }
-function contarVenceHoje(){ if(!Array.isArray(despesas)) return 0; const hoje=vencHojeISO(); return despesas.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===hoje).length; }
-function contarVenceAmanha(){ if(!Array.isArray(despesas)) return 0; const amanha=vencAddDiasISO(1); return despesas.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===amanha).length; }
+function contarVencidos(){ if(!Array.isArray(abertosCache)) return 0; const hoje=vencHojeISO(); return abertosCache.filter(d=>{ const v=(d&&d.vencimento||'').substring(0,10); return d && d.status==='A_PAGAR' && v && v<hoje; }).length; }
+function contarVenceHoje(){ if(!Array.isArray(abertosCache)) return 0; const hoje=vencHojeISO(); return abertosCache.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===hoje).length; }
+function contarVenceAmanha(){ if(!Array.isArray(abertosCache)) return 0; const amanha=vencAddDiasISO(1); return abertosCache.filter(d=>d && d.status==='A_PAGAR' && (d.vencimento||'').substring(0,10)===amanha).length; }
 function atualizarBotaoVencidos(){ const btn=document.getElementById('btn-vencido'); if(!btn) return; const n=contarVencidos(); btn.style.display='inline-flex';
   if(n>0){ btn.classList.remove('zero'); btn.innerHTML='<span class="vh-dot"></span>⚠ '+n+' vencido'+(n>1?'s':''); btn.title='Clique para filtrar os '+n+' item(ns) em aberto já vencidos'; }
   else { btn.classList.add('zero'); btn.innerHTML='<span class="vh-dot"></span>✓ Nenhum vencido'; btn.title='Nenhum item em aberto está vencido'; } }
@@ -1117,9 +1164,9 @@ function atualizarBotaoVenceAmanha(){ const btn=document.getElementById('btn-ven
   else { btn.classList.add('zero'); btn.innerHTML='<span class="vh-dot"></span>✓ Nada vence amanhã'; btn.title='Nenhum item em aberto vence amanhã'; } }
 function atualizarBotoesVenc(){ atualizarBotaoVencidos(); atualizarBotaoVenceHoje(); atualizarBotaoVenceAmanha(); }
 function _vencLimpa(ids){ ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
-function filtrarVencidos(){ const ontem=vencAddDiasISO(-1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo','flt-de']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vf=$('flt-ate'); if(vf) vf.value=ontem; renderLista(); }
-function filtrarVenceHoje(){ const hoje=vencHojeISO(); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=hoje; const vf=$('flt-ate'); if(vf) vf.value=hoje; renderLista(); }
-function filtrarVenceAmanha(){ const amanha=vencAddDiasISO(1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=amanha; const vf=$('flt-ate'); if(vf) vf.value=amanha; renderLista(); }
+function filtrarVencidos(){ const ontem=vencAddDiasISO(-1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo','flt-de']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vf=$('flt-ate'); if(vf) vf.value=ontem; aplicarFiltros(); }
+function filtrarVenceHoje(){ const hoje=vencHojeISO(); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=hoje; const vf=$('flt-ate'); if(vf) vf.value=hoje; aplicarFiltros(); }
+function filtrarVenceAmanha(){ const amanha=vencAddDiasISO(1); _vencLimpa(['flt-busca','flt-forma','flt-placa','flt-tipo']); const st=$('flt-status'); if(st) st.value='A_PAGAR'; const vi=$('flt-de'); if(vi) vi.value=amanha; const vf=$('flt-ate'); if(vf) vf.value=amanha; aplicarFiltros(); }
 
 /* ===================== SELEÇÃO / BAIXA EM LOTE ===================== */
 function onSel(){
@@ -1172,7 +1219,8 @@ async function confirmarBaixa(){
     baixaAlvo.ids.forEach(id=>{ const dd=despesas.find(x=>x.id===id); if(dd){ dd.status='PAGO'; dd.pagamento=data; dd.conta=conta; if(baixaAlvo.modo==='single') dd.juros=juros; } });
     renderLista();
     toast(baixaAlvo.modo==='lote'? `${baixaAlvo.ids.length} baixado(s).` : 'Baixa registrada.');
-    setSync('online'); fecharBaixa(); await carregar();
+    baixaAlvo.ids.forEach(id=>{ const a=abertosCache.find(x=>x.id===id); if(a){ a.status='PAGO'; a.pagamento=data; a.conta=conta; if(baixaAlvo.modo==='single') a.juros=juros; } });
+    setSync('online'); fecharBaixa(); renderLista();
   }catch(e){ console.error(e); setSync('err'); toast('Erro ao dar baixa: '+e.message,true); }
   finally{ btn.disabled=false; btn.textContent='✓ Confirmar'; showLoading(false); }
 }
@@ -1182,7 +1230,7 @@ function csvCell(v){ const s=(v==null?'':String(v)).replace(/"/g,'""'); return /
 function limparFiltros(){
   ['flt-busca','flt-de','flt-ate'].forEach(id=>{ if($(id))$(id).value=''; });
   ['flt-status','flt-placa','flt-tipo','flt-forma'].forEach(id=>{ if($(id))$(id).value=''; });
-  renderLista();
+  aplicarFiltros();
 }
 function exportarCSV(){
   const list=applySort(filtrar());
@@ -1757,7 +1805,7 @@ function comprovNorm(x){ return String(x||'').normalize('NFD').replace(/[\u0300-
 function comprovCandidatos(rc){
   const nomeR=comprovNorm(rc.nome);
   const cpfR=String(rc.cpf||'').replace(/\D/g,'');
-  return despesas.filter(d=>{
+  return abertosCache.filter(d=>{
     if(d.status!=='A_PAGAR') return false;
     if(!String(d.forma_pagamento||'').toUpperCase().includes('PIX')) return false;
     if(rc.chave && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave)) return true;       // 1) chave
@@ -1782,7 +1830,9 @@ function comprovAvaliar(rc, path, destino){
 }
 async function processarComprovantes(){
   let paths; try{ paths=await comprovListarInbox(); }catch(e){ return; }
-  const jaVinculados=new Set(despesas.map(d=>d.comprovante).filter(Boolean));
+  let jaVinculados;
+  try{ const linked=await sbAll('despesas?select=comprovante&comprovante=not.is.null'); jaVinculados=new Set((linked||[]).map(x=>x.comprovante).filter(Boolean)); }
+  catch(e){ jaVinculados=new Set((abertosCache||[]).map(d=>d.comprovante).filter(Boolean)); }
   const pend=[]; let baixados=0;
   for(const path of paths){
     if(jaVinculados.has(path)) continue;

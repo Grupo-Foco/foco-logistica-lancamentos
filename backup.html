@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backup — FOCO Logística</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --verde:#27401f; --verde-mid:#4a7c3f; --creme:#f3f2ea; --creme-dark:#e3e1d3; --branco:#fff; --cinza:#8a8f82; --texto:#2b2f26; --sucesso:#2f8f4e; --amber:#b8781e; --err:#c0392b; --shadow-lg:0 10px 40px rgba(39,64,31,.18); }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--creme);color:var(--texto);font-family:'DM Sans',sans-serif;padding:32px 16px;}
+  .wrap{max-width:720px;margin:0 auto;}
+  h1{font-family:'Syne',sans-serif;font-weight:800;color:var(--verde);font-size:26px;margin:0 0 4px;}
+  .sub{color:var(--cinza);font-size:14px;margin:0 0 22px;}
+  .card{background:var(--branco);border:1px solid var(--creme-dark);border-radius:16px;box-shadow:var(--shadow-lg);padding:22px;}
+  .btn{font-family:'DM Mono',monospace;font-weight:500;font-size:14px;border-radius:11px;padding:12px 18px;border:1.5px solid var(--verde);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:8px;}
+  .btn-primary{background:var(--verde);color:#fff;} .btn-primary:hover{background:#1c2f16;}
+  .btn-ghost{background:var(--branco);color:var(--verde);} .btn-ghost:hover{background:var(--creme);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;}
+  .linha{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--creme-dark);font-size:14px;}
+  .linha:last-child{border-bottom:none;}
+  .linha .t{font-family:'DM Mono',monospace;color:var(--texto);}
+  .linha .n{font-family:'DM Mono',monospace;font-weight:500;}
+  .ok{color:var(--sucesso);} .warn{color:var(--amber);} .bad{color:var(--err);}
+  .msg{font-size:13px;color:var(--cinza);margin-top:14px;line-height:1.5;}
+  #lista{margin-top:16px;display:none;}
+  .total{margin-top:14px;padding-top:12px;border-top:2px solid var(--creme-dark);font-family:'DM Mono',monospace;font-weight:500;display:flex;justify-content:space-between;}
+  .pill{display:inline-block;background:#e8f5ec;color:var(--sucesso);border-radius:999px;padding:2px 10px;font-size:12px;font-family:'DM Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🗄️ Backup — FOCO Logística</h1>
+  <p class="sub">Baixa uma cópia completa dos dados do sistema (Supabase) para o seu computador. Guarde em local seguro.</p>
+  <div class="card">
+    <button id="btn-gerar" class="btn btn-primary" onclick="gerarBackup()">⤓ Gerar backup agora</button>
+    <div id="lista"></div>
+    <div id="acts" class="acts" style="display:none">
+      <button id="btn-json" class="btn btn-primary" onclick="baixarJSON()">💾 Baixar backup (JSON)</button>
+      <button id="btn-xlsx" class="btn btn-ghost" onclick="baixarXLSX()">📊 Baixar backup (Excel)</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+  <p class="msg">O <b>JSON</b> é a cópia fiel e completa (serve para restaurar). O <b>Excel</b> é para leitura (uma aba por tabela). O backup é um retrato do momento em que você clicar — refaça periodicamente.</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const SB_URL='https://kafucdhwbgpdwefkxlta.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthZnVjZGh3YmdwZHdlZmt4bHRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1OTE2NjgsImV4cCI6MjA5ODE2NzY2OH0.m8PZZf844Gn5xteopsA0s5nRlcS-HEKgzsVNMoWqLog';
+const TABELAS=['despesas','fretes','receita_parcelas','endividamento','endividamento_parcelas','caminhoes','fornecedores','motoristas','usuarios'];
+let BACKUP=null;
+
+function $(id){return document.getElementById(id);}
+function hoje(){const d=new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+
+async function sbGet(path){
+  const r=await fetch(`${SB_URL}/rest/v1/${path}`,{cache:'no-store',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+  if(!r.ok) throw new Error(r.status+': '+(await r.text()).slice(0,120));
+  const t=await r.text(); return t?JSON.parse(t):[];
+}
+async function sbAll(tabela){
+  let out=[],off=0;
+  for(let i=0;i<500;i++){
+    const page=await sbGet(`${tabela}?select=*&order=id.asc&limit=1000&offset=${off}`);
+    out=out.concat(page||[]);
+    if(!page||page.length<1000) break;
+    off+=1000;
+  }
+  return out;
+}
+
+async function gerarBackup(){
+  $('btn-gerar').disabled=true;
+  $('acts').style.display='none';
+  const lista=$('lista'); lista.style.display='block'; lista.innerHTML='';
+  $('msg').textContent='';
+  const dados={}, contagens={}; let totalLinhas=0, erros=0;
+  for(const tab of TABELAS){
+    const row=document.createElement('div'); row.className='linha';
+    row.innerHTML=`<span class="t">${tab}</span><span class="n" id="c-${tab}">⏳ lendo…</span>`;
+    lista.appendChild(row);
+    try{
+      const arr=await sbAll(tab);
+      dados[tab]=arr; contagens[tab]=arr.length; totalLinhas+=arr.length;
+      $('c-'+tab).innerHTML=`<span class="ok">${arr.length.toLocaleString('pt-BR')} ✓</span>`;
+    }catch(e){
+      dados[tab]=[]; contagens[tab]=null; erros++;
+      $('c-'+tab).innerHTML=`<span class="warn">não acessível</span>`;
+    }
+  }
+  const tot=document.createElement('div'); tot.className='total';
+  tot.innerHTML=`<span>TOTAL</span><span>${totalLinhas.toLocaleString('pt-BR')} linhas</span>`;
+  lista.appendChild(tot);
+  BACKUP={ gerado_em:new Date().toISOString(), origem:SB_URL, contagens, tabelas:dados };
+  $('acts').style.display='flex';
+  $('btn-gerar').disabled=false; $('btn-gerar').textContent='↺ Gerar novamente';
+  $('msg').innerHTML = erros? `<span class="warn">Atenção: ${erros} tabela(s) não puderam ser lidas (permissão). O restante está no backup.</span>` : '<span class="pill">backup pronto — baixe abaixo</span>';
+}
+
+function baixarArquivo(blob,nome){
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=nome; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function baixarJSON(){
+  if(!BACKUP) return;
+  const blob=new Blob([JSON.stringify(BACKUP,null,2)],{type:'application/json'});
+  baixarArquivo(blob, `foco-logistica-backup-${hoje()}.json`);
+}
+function baixarXLSX(){
+  if(!BACKUP) return;
+  if(typeof XLSX==='undefined'){ $('msg').innerHTML='<span class="bad">Biblioteca do Excel não carregou (sem internet?). Use o JSON.</span>'; return; }
+  const wb=XLSX.utils.book_new();
+  for(const tab of TABELAS){
+    const arr=BACKUP.tabelas[tab]||[];
+    const ws= arr.length? XLSX.utils.json_to_sheet(arr) : XLSX.utils.aoa_to_sheet([['(vazio ou não acessível)']]);
+    XLSX.utils.book_append_sheet(wb, ws, tab.slice(0,31));
+  }
+  XLSX.writeFile(wb, `foco-logistica-backup-${hoje()}.xlsx`);
+}
+</script>
+</body>
+</html>
