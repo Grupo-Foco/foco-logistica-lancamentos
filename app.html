@@ -1077,12 +1077,15 @@ function montarQueryFiltros(){
 async function aplicarFiltros(){
   if(baseCompleta){ renderLista(); return; }
   if(_buscando) return;
-  if(temFiltroAtivo()){
-    _buscando=true; setSync('sync');
-    try{ despesas = await sbAll('despesas?'+montarQueryFiltros()); }
-    catch(e){ toast('Erro na busca: '+e.message,true); despesas=_vistaPadrao(); }
-    _buscando=false; setSync('online');
-  } else { despesas=_vistaPadrao(); }
+  const busca=($('flt-busca')?$('flt-busca').value:'').trim();
+  const deV=$('flt-de')?$('flt-de').value:'';
+  // só vai ao servidor quando o filtro pode alcançar dados FORA da janela já carregada
+  const precisaServidor = !!busca || (deV && deV < janelaIni());
+  if(!precisaServidor){ despesas=_vistaPadrao(); renderLista(); return; }
+  _buscando=true; setSync('sync');
+  try{ despesas = await sbAll('despesas?'+montarQueryFiltros()); }
+  catch(e){ toast('Erro na busca: '+e.message,true); despesas=_vistaPadrao(); }
+  _buscando=false; setSync('online');
   renderLista();
 }
 function aplicarFiltrosDebounced(){ clearTimeout(_filterTimer); _filterTimer=setTimeout(aplicarFiltros,350); }
@@ -1830,8 +1833,9 @@ function comprovAvaliar(rc, path, destino){
 }
 async function processarComprovantes(){
   let paths; try{ paths=await comprovListarInbox(); }catch(e){ return; }
+  if(!paths.length){ comprovantesPendentes=[]; atualizarBadgeComprov(); return; }
   let jaVinculados;
-  try{ const linked=await sbAll('despesas?select=comprovante&comprovante=not.is.null'); jaVinculados=new Set((linked||[]).map(x=>x.comprovante).filter(Boolean)); }
+  try{ const inList=paths.map(x=>'"'+x+'"').join(','); const linked=await sbAll('despesas?select=comprovante&comprovante=in.('+encodeURIComponent(inList)+')'); jaVinculados=new Set((linked||[]).map(x=>x.comprovante).filter(Boolean)); }
   catch(e){ jaVinculados=new Set((abertosCache||[]).map(d=>d.comprovante).filter(Boolean)); }
   const pend=[]; let baixados=0;
   for(const path of paths){
