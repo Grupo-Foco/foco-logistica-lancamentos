@@ -1776,11 +1776,13 @@ function comprovExtrair(txt){
   const mChave=t.match(/Chave Pix\s*([+\w.\-@]+)/i);
   const chave=mChave? mChave[1] : null;
   const mId=t.match(/\b(E\d{20,})\b/);
-  const mNome=t.match(/Pix Enviado\s+([A-Za-zÀ-úÇç][A-Za-zÀ-úÇç .]+?)\s+(?:Foco|CPF|CNPJ|Ltda|LTDA|ME\b)/i);
+  const mNome=t.match(/Pix Enviado\s+(?:Recebedor\s+)?([A-Za-zÀ-úÇç&][A-Za-zÀ-úÇç &.]+?)\s+(?:Foco|CPF|CNPJ|Ag[êe]ncia|Ltda|LTDA|ME\b)/i)
+            || t.match(/Recebedor\s+([A-Za-zÀ-úÇç&][A-Za-zÀ-úÇç &.]+?)\s+(?:CPF|CNPJ|Ag[êe]ncia)/i);
   const nome=mNome? mNome[1].trim() : null;
-  const mCpf=t.match(/CPF\s*([\d.*\u2022\-]{7,18})/i);
-  const cpf=mCpf? mCpf[1] : null;
-  return {valor, dataISO, chave, idPix: mId?mId[1]:null, nome, cpf};
+  const receb=(t.split(/Pagador/i)[0]||t);
+  const mDoc=receb.match(/\bCNPJ\s*([0-9][0-9.\/\-]{13,17})/i) || receb.match(/\bCPF\s*([\d.*\u2022\-]{7,18})/i);
+  const doc=mDoc? mDoc[1] : null;
+  return {valor, dataISO, chave, idPix: mId?mId[1]:null, nome, doc, cpf:doc};
 }
 function comprovExtrairVarios(txt){
   const t=String(txt||'').replace(/\s+/g,' ');
@@ -1805,15 +1807,27 @@ async function comprovListarInbox(){
   return (arr||[]).filter(o=>o&&o.name&&o.id&&/\.pdf$/i.test(o.name)).map(o=>'inbox/'+o.name);
 }
 function comprovNorm(x){ return String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim(); }
+function comprovNomeParecido(a,b){
+  const na=comprovNorm(a), nb=comprovNorm(b);
+  if(!na||!nb) return false;
+  if(na===nb) return true;
+  if(na.length>=8 && (na.startsWith(nb)||nb.startsWith(na))) return true;   // nome truncado no comprovante
+  const ta=na.split(' ').filter(w=>w.length>2), tbArr=nb.split(' ').filter(w=>w.length>2), tb=new Set(tbArr);
+  if(!ta.length||!tb.size) return false;
+  const comuns=ta.filter(w=>tb.has(w)).length;
+  return comuns>=2 && (comuns/Math.min(ta.length, tb.size))>=0.6;          // >=2 palavras fortes em comum e >=60%
+}
 function comprovCandidatos(rc){
   const nomeR=comprovNorm(rc.nome);
-  const cpfR=String(rc.cpf||'').replace(/\D/g,'');
+  const docR=String(rc.doc||'').replace(/\D/g,'');
   return abertosCache.filter(d=>{
     if(d.status!=='A_PAGAR') return false;
     if(!String(d.forma_pagamento||'').toUpperCase().includes('PIX')) return false;
-    if(rc.chave && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave)) return true;       // 1) chave
-    if(nomeR && comprovNorm(d.fornecedor)===nomeR) return true;                                 // 2) nome do recebedor
-    if(cpfR.length>=6 && String(d.cnpj||'').replace(/\D/g,'').includes(cpfR)) return true;      // 3) CPF (dígitos visíveis)
+    if(rc.chave && d.chave_pix && comprovChaveIgual(d.chave_pix, rc.chave)) return true;        // 1) chave Pix
+    const dDoc=String(d.cnpj||'').replace(/\D/g,'');
+    if(docR.length>=14 && dDoc===docR) return true;                                              // 2) CNPJ exato
+    if(docR.length>=6 && docR.length<14 && dDoc && dDoc.includes(docR)) return true;             // 3) CPF (dígitos visíveis)
+    if(nomeR && comprovNomeParecido(rc.nome, d.fornecedor)) return true;                         // 4) nome parecido
     return false;
   });
 }
