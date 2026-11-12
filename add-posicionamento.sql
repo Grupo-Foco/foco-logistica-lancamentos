@@ -18,6 +18,8 @@ create table if not exists posicionamento (
 
 create index if not exists idx_posicionamento_data on posicionamento (data);
 
+alter table posicionamento disable row level security;
+
 delete from posicionamento where data = '2026-11-11'::date and lancador = 'Semente';
 
 insert into posicionamento (data, placa, grupo, produto, empresa, origem, destino, localizacao, situacao, motorista, obs, ordem, lancador) values
@@ -35,3 +37,5 @@ insert into posicionamento (data, placa, grupo, produto, empresa, origem, destin
   ('2026-11-11'::date, 'RCN-7I11', 'FAZENDAS',    null,                  null,                null,                 null,                                              'PADRE BERNARDO-GO',       'SERVIÇOS - FAZENDA',                                              'EDMAR',        null,                                                                                                 11, 'Semente'),
   ('2026-11-11'::date, 'NKT-0H38', 'FAZENDAS',    null,                  null,                null,                 null,                                              'BREJINHO-TO',             'SERVIÇOS - FAZENDA',                                              'ACLEUTO',      null,                                                                                                 12, 'Semente'),
   ('2026-11-11'::date, 'RBP-1G55', 'RODOTREM',    null,                  null,                null,                 null,                                              null,                      null,                                                              null,           null,                                                                                                 13, 'Semente');
+
+select data, count(*) as linhas from posicionamento group by data order by data;
