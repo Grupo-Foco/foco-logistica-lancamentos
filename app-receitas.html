@@ -594,8 +594,13 @@ function filtrar(){
     return true;
   });
 }
+function _frPrev(f){
+  const ps=parcelasDe(f.id).map(x=>x.previsao).filter(Boolean).map(x=>String(x).slice(0,10)).sort();
+  return ps[0] || (f.data_carregamento?String(f.data_carregamento).slice(0,10):'') || (f.data_descarregamento?String(f.data_descarregamento).slice(0,10):'') || '0000-00-00';
+}
 function renderLista(){
   const list=filtrar();
+  list.sort((a,b)=> _frPrev(b).localeCompare(_frPrev(a)) || (b.codigo||'').localeCompare(a.codigo||''));
   // KPIs sobre o conjunto filtrado
   const ids=new Set(list.map(f=>f.id));
   const ps=parcelasBD.filter(p=>ids.has(p.frete_id));
