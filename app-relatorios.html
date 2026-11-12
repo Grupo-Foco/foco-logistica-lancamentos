@@ -80,6 +80,7 @@ tfoot td{padding:12px 14px;font-weight:700;border-top:2px solid var(--creme-dark
     <div class="sync"><span class="dot" id="syncDot"></span><span id="syncTxt">conectando…</span></div>
     <span class="user-badge" id="userBadge"></span>
     <button class="btn-h" onclick="location.href='app.html'">← Lançamentos</button>
+    <button class="btn-h" onclick="location.href='app-posicionamento.html'">◎ Posicionamento</button>
     <button class="btn-h" onclick="sair()">⎋ Sair</button>
   </div>
 </header>
@@ -328,7 +329,7 @@ function exportarPDF(){
   doc.setFontSize(14); doc.setTextColor(39,64,31); doc.text('FOCO logística — '+titulo, 40, 40);
   doc.setFontSize(10); doc.setTextColor(120); doc.text(sub||'', 40, 58);
   doc.autoTable({ startY:72, head:[exportData.head], body:exportData.rows,
-    styles:{fontSize:8, cellPadding:4}, headStyles:{fillColor:[39,64,31]},
+    styles:{fontSize:8, cellPadding:4, lineWidth:0.5, lineColor:[210,208,196]}, headStyles:{fillColor:[39,64,31], lineWidth:0.5, lineColor:[255,255,255]},
     alternateRowStyles:{fillColor:[243,242,234]},
     didParseCell:function(data){
       if(data.section!=='body') return;
