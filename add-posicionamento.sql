@@ -18,7 +18,12 @@ create table if not exists posicionamento (
 
 create index if not exists idx_posicionamento_data on posicionamento (data);
 
-alter table posicionamento disable row level security;
+grant select, insert, update, delete on posicionamento to anon, authenticated;
+grant usage, select on sequence posicionamento_id_seq to anon, authenticated;
+
+alter table posicionamento enable row level security;
+drop policy if exists p_anon_all on posicionamento;
+create policy p_anon_all on posicionamento for all to anon, authenticated using (true) with check (true);
 
 delete from posicionamento where data = '2026-11-11'::date and lancador = 'Semente';
 
@@ -38,4 +43,6 @@ insert into posicionamento (data, placa, grupo, produto, empresa, origem, destin
   ('2026-11-11'::date, 'NKT-0H38', 'FAZENDAS',    null,                  null,                null,                 null,                                              'BREJINHO-TO',             'SERVIÇOS - FAZENDA',                                              'ACLEUTO',      null,                                                                                                 12, 'Semente'),
   ('2026-11-11'::date, 'RBP-1G55', 'RODOTREM',    null,                  null,                null,                 null,                                              null,                      null,                                                              null,           null,                                                                                                 13, 'Semente');
 
-select data, count(*) as linhas from posicionamento group by data order by data;
+select 'linhas 11/11' as info, count(*)::text as valor from posicionamento where data = '2026-11-11'::date
+union all
+select 'policies', count(*)::text from pg_policies where tablename = 'posicionamento';
