@@ -322,7 +322,7 @@ td:last-child{white-space:nowrap;}
           <div class="field span2">
             <label>Fornecedor <span class="req">★</span></label>
             <input id="f_fornecedor" placeholder="Digite o nome do fornecedor…" autocomplete="off"
-                   oninput="buscaForn(this.value)" onblur="fecharDD(120)" onkeydown="navDD(event)">
+                   oninput="buscaForn(this.value)" onblur="fecharDD(120)" onkeydown="navDD(event)" onchange="preencherPixForn(this.value)">
             <div class="dropdown" id="forn-dd"></div>
           </div>
           <div class="field">
@@ -817,12 +817,17 @@ function buscaForn(q){
   if(q.length<2 || !fornecedoresBD.length){ dd.className='dropdown'; return; }
   const m=fornecedoresBD.filter(f=>(f.nome||'').toLowerCase().includes(q)).slice(0,8);
   let html=m.map((f,i)=>`<div class="dd-item" data-i="${i}" onmousedown="selForn('${esc(f.nome)}','${esc(f.cnpj||'')}')">
-    <div class="nm">${esc(f.nome)}</div><div class="cnpj">${f.cnpj?'📋 '+esc(f.cnpj):'— sem CNPJ'}</div></div>`).join('');
+    <div class="nm">${esc(f.nome)}</div><div class="cnpj">${f.cnpj?'📋 '+esc(f.cnpj):'— sem CNPJ'}${f.chave_pix?'  ·  ⚡ '+esc(f.chave_pix):''}</div></div>`).join('');
   const existe=fornecedoresBD.some(f=>(f.nome||'').toUpperCase()===q.toUpperCase());
   if(!existe) html+=`<div class="dd-item new" onmousedown="selForn('${esc(q)}','')"><div class="nm">+ Usar "${esc(q)}" como novo</div><div class="cnpj">salvo ao confirmar</div></div>`;
   dd.innerHTML=html; dd.className='dropdown'+(html?' show':'');
 }
-function selForn(nome,cnpj){ $('f_fornecedor').value=nome.toUpperCase(); if(cnpj)$('f_cnpj').value=cnpj; fecharDD(0); }
+function selForn(nome,cnpj){ $('f_fornecedor').value=nome.toUpperCase(); if(cnpj)$('f_cnpj').value=cnpj; preencherPixForn(nome); fecharDD(0); }
+function preencherPixForn(nome){
+  if(!nome) return;
+  const f=fornecedoresBD.find(x=>(x.nome||'').toUpperCase()===nome.trim().toUpperCase());
+  if(f && f.chave_pix && !$('f_pix').value.trim()){ $('f_pix').value=f.chave_pix; }
+}
 function fecharDD(ms){ setTimeout(()=>{const dd=$('forn-dd'); if(dd) dd.className='dropdown';},ms); }
 function navDD(e){
   const dd=$('forn-dd'), items=dd.querySelectorAll('.dd-item'); if(!items.length)return;
@@ -984,7 +989,7 @@ async function salvar(){
     const nfPaths=[...keepNfs]; for(const f of pendingNfs) nfPaths.push(await uploadAnexo(f,'despesas-nf'));
     base.boleto = boletoPaths.length? JSON.stringify(boletoPaths):null;
     base.nf     = nfPaths.length? JSON.stringify(nfPaths):null;
-    await salvarFornecedorSeNovo(forn.toUpperCase(), $('f_cnpj').value.trim());
+    await salvarFornecedorSeNovo(forn.toUpperCase(), $('f_cnpj').value.trim(), base.chave_pix);
     await salvarCaminhaoSeNovo(placa);
     await salvarMotoristaSeNovo(base.motorista);
 
@@ -1040,11 +1045,18 @@ async function salvar(){
   finally{ btn.disabled=false; btn.textContent='✓ Salvar lançamento'; }
 }
 
-async function salvarFornecedorSeNovo(nome,cnpj){
+async function salvarFornecedorSeNovo(nome,cnpj,pix){
   if(!nome) return;
-  const existe=fornecedoresBD.some(f=>(f.nome||'').toUpperCase()===nome.toUpperCase());
-  if(existe) return;
-  try{ const r=await sb('fornecedores',{method:'POST',body:JSON.stringify({nome,cnpj:cnpj||null})}); if(r&&r[0]) fornecedoresBD.push(r[0]); }catch(e){}
+  pix=(pix||'').trim()||null;
+  const f=fornecedoresBD.find(x=>(x.nome||'').toUpperCase()===nome.toUpperCase());
+  if(!f){
+    try{ const r=await sb('fornecedores',{method:'POST',body:JSON.stringify({nome,cnpj:cnpj||null,chave_pix:pix})}); if(r&&r[0]) fornecedoresBD.push(r[0]); }catch(e){}
+    return;
+  }
+  if(pix && f.chave_pix!==pix){
+    f.chave_pix=pix;
+    if(f.id){ try{ await sb('fornecedores?id=eq.'+f.id,{method:'PATCH',body:JSON.stringify({chave_pix:pix})}); }catch(e){} }
+  }
 }
 async function salvarCaminhaoSeNovo(placa){
   if(!placa) return;
