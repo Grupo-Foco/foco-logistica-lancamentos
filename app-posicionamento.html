@@ -279,11 +279,18 @@ function gerarPDF(){
   if(!JS){ toast('Biblioteca do PDF não carregou (verifique a conexão).',true); return; }
   const data=$('f-data').value||hojeISO();
   const doc=new JS({orientation:'landscape',unit:'pt',format:'a4'});
-  doc.setFontSize(15); doc.setTextColor(39,64,31); doc.setFont(undefined,'bold');
-  doc.text('POSICIONAMENTO FROTA', 40, 40);
-  doc.setFontSize(11); doc.setTextColor(120); doc.setFont(undefined,'normal');
-  doc.text(fdateBR(data), 40, 58);
-  let y=74;
+  const PW=doc.internal.pageSize.getWidth(), PH=doc.internal.pageSize.getHeight();
+  const L=40, R=PW-40, CX=PW/2, W=R-L, VERDE=[39,64,31];
+  const MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const dp=(data||'').split('-');
+  const dataExt = (dp.length===3)? (parseInt(dp[2],10)+' de '+MES[parseInt(dp[1],10)-1]+' de '+dp[0]) : fdateBR(data);
+  try{ const img=document.querySelector('.logo img'); if(img && img.src) doc.addImage(img.src,'JPEG',L,22,34,34); }catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(39,64,31);
+  doc.text('POSICIONAMENTO DA FROTA', CX, 42, {align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110,110,110);
+  doc.text(dataExt, CX, 56, {align:'center'});
+  doc.setDrawColor(39,64,31); doc.setLineWidth(1.2); doc.line(L,64,R,64);
+  let y=76;
   const head=[['Placa','Produto / carga','Rota','Localização','Situação','Motorista','Observação']];
   GRUPOS.forEach(g=>{
     const placas = FROTA.filter(f=> (estado[f.placa].grupo||f.grupo)===g).map(f=>f.placa);
@@ -295,19 +302,23 @@ function gerarPDF(){
       const rota = (r.origem||r.destino)? ((r.origem||'')+' X '+(r.destino||'')) : '';
       return [r.placa, carga, rota, r.localizacao||'', r.situacao||'', r.motorista||'', r.obs||''];
     });
-    doc.setFontSize(11); doc.setTextColor(39,64,31); doc.setFont(undefined,'bold');
-    doc.text(g, 40, y+2);
+    if(y + 60 > PH-30){ doc.addPage(); y=50; }
+    doc.setFillColor(39,64,31); doc.rect(L,y,W,15,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,255,255);
+    doc.text(g, CX, y+10.5, {align:'center'});
+    y+=15;
     doc.autoTable({
-      startY:y+8, head:head, body:body,
-      styles:{fontSize:8, cellPadding:4, lineWidth:0.5, lineColor:[200,198,185], valign:'middle', overflow:'linebreak'},
-      headStyles:{fillColor:[39,64,31], textColor:[255,255,255], lineWidth:0.5, lineColor:[255,255,255]},
-      alternateRowStyles:{fillColor:[243,242,234]},
-      columnStyles:{0:{cellWidth:56,fontStyle:'bold'},1:{cellWidth:132},2:{cellWidth:196},3:{cellWidth:96},4:{cellWidth:116},5:{cellWidth:78},6:{cellWidth:'auto'}},
-      margin:{left:40,right:40}
+      startY:y, head:head, body:body,
+      styles:{fontSize:7, cellPadding:2.5, lineWidth:0.4, lineColor:[205,203,190], valign:'middle', overflow:'linebreak', textColor:[40,40,40]},
+      headStyles:{fillColor:[233,235,228], textColor:[39,64,31], lineWidth:0.4, lineColor:[205,203,190], fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[246,246,240]},
+      columnStyles:{0:{cellWidth:54,fontStyle:'bold'},1:{cellWidth:130},2:{cellWidth:196},3:{cellWidth:94},4:{cellWidth:116},5:{cellWidth:76},6:{cellWidth:'auto'}},
+      margin:{left:L,right:40}
     });
-    y = doc.lastAutoTable.finalY + 16;
-    if(y > doc.internal.pageSize.getHeight()-60){ doc.addPage(); y=50; }
+    y = doc.lastAutoTable.finalY + 9;
   });
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150,150,150);
+  doc.text('FOCO Logística  ·  Posicionamento da frota', CX, PH-20, {align:'center'});
   doc.save(`posicionamento_${data}.pdf`);
   toast('PDF gerado.');
 }
