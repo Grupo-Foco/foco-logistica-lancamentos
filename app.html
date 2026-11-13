@@ -322,7 +322,7 @@ td:last-child{white-space:nowrap;}
           <div class="field span2">
             <label>Fornecedor <span class="req">★</span></label>
             <input id="f_fornecedor" placeholder="Digite o nome do fornecedor…" autocomplete="off"
-                   oninput="buscaForn(this.value)" onblur="fecharDD(120)" onkeydown="navDD(event)" onchange="preencherPixForn(this.value)">
+                   oninput="buscaForn(this.value)" onblur="fecharDD(120)" onkeydown="navDD(event)" onchange="aplicarFornecedor(this.value)">
             <div class="dropdown" id="forn-dd"></div>
           </div>
           <div class="field">
@@ -822,11 +822,21 @@ function buscaForn(q){
   if(!existe) html+=`<div class="dd-item new" onmousedown="selForn('${esc(q)}','')"><div class="nm">+ Usar "${esc(q)}" como novo</div><div class="cnpj">salvo ao confirmar</div></div>`;
   dd.innerHTML=html; dd.className='dropdown'+(html?' show':'');
 }
-function selForn(nome,cnpj){ $('f_fornecedor').value=nome.toUpperCase(); if(cnpj)$('f_cnpj').value=cnpj; preencherPixForn(nome); fecharDD(0); }
-function preencherPixForn(nome){
-  if(!nome) return;
-  const f=fornecedoresBD.find(x=>(x.nome||'').toUpperCase()===nome.trim().toUpperCase());
-  if(f && f.chave_pix && !$('f_pix').value.trim()){ $('f_pix').value=f.chave_pix; }
+function selForn(nome,cnpj){ $('f_fornecedor').value=(nome||'').toUpperCase(); aplicarFornecedor(nome); fecharDD(0); }
+let _autoCnpj='', _autoPix='';
+function aplicarFornecedor(nome){
+  const cEl=$('f_cnpj'), pEl=$('f_pix'); if(!cEl||!pEl) return;
+  const f = nome? fornecedoresBD.find(x=>(x.nome||'').toUpperCase()===nome.trim().toUpperCase()) : null;
+  if(f){
+    cEl.value = f.cnpj || '';
+    pEl.value = f.chave_pix || '';
+    _autoCnpj = cEl.value; _autoPix = pEl.value;
+  } else {
+    /* nome novo/desconhecido: limpa só o que foi preenchido de um fornecedor anterior, preserva o que o usuário digitou */
+    if(cEl.value===_autoCnpj) cEl.value='';
+    if(pEl.value===_autoPix) pEl.value='';
+    _autoCnpj=''; _autoPix='';
+  }
 }
 function fecharDD(ms){ setTimeout(()=>{const dd=$('forn-dd'); if(dd) dd.className='dropdown';},ms); }
 function navDD(e){
@@ -1047,16 +1057,16 @@ async function salvar(){
 
 async function salvarFornecedorSeNovo(nome,cnpj,pix){
   if(!nome) return;
-  pix=(pix||'').trim()||null;
+  cnpj=(cnpj||'').trim()||null; pix=(pix||'').trim()||null;
   const f=fornecedoresBD.find(x=>(x.nome||'').toUpperCase()===nome.toUpperCase());
   if(!f){
-    try{ const r=await sb('fornecedores',{method:'POST',body:JSON.stringify({nome,cnpj:cnpj||null,chave_pix:pix})}); if(r&&r[0]) fornecedoresBD.push(r[0]); }catch(e){}
+    try{ const r=await sb('fornecedores',{method:'POST',body:JSON.stringify({nome,cnpj,chave_pix:pix})}); if(r&&r[0]) fornecedoresBD.push(r[0]); }catch(e){}
     return;
   }
-  if(pix && f.chave_pix!==pix){
-    f.chave_pix=pix;
-    if(f.id){ try{ await sb('fornecedores?id=eq.'+f.id,{method:'PATCH',body:JSON.stringify({chave_pix:pix})}); }catch(e){} }
-  }
+  const patch={};
+  if(cnpj && f.cnpj!==cnpj){ patch.cnpj=cnpj; f.cnpj=cnpj; }
+  if(pix && f.chave_pix!==pix){ patch.chave_pix=pix; f.chave_pix=pix; }
+  if(Object.keys(patch).length && f.id){ try{ await sb('fornecedores?id=eq.'+f.id,{method:'PATCH',body:JSON.stringify(patch)}); }catch(e){} }
 }
 async function salvarCaminhaoSeNovo(placa){
   if(!placa) return;
