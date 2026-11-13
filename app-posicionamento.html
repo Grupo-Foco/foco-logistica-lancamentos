@@ -292,7 +292,7 @@ function gerarPDF(){
     if(!placasND.length) return;
     const body = placasND.map(p=>{ const r=estado[p];
       const carga = (r.produto||'') + (r.empresa? (r.produto?' ':'')+'('+r.empresa+')':'');
-      const rota = (r.origem||r.destino)? ((r.origem||'')+' → '+(r.destino||'')) : '';
+      const rota = (r.origem||r.destino)? ((r.origem||'')+' X '+(r.destino||'')) : '';
       return [r.placa, carga, rota, r.localizacao||'', r.situacao||'', r.motorista||'', r.obs||''];
     });
     doc.setFontSize(11); doc.setTextColor(39,64,31); doc.setFont(undefined,'bold');
