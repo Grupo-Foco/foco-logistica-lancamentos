@@ -269,7 +269,7 @@ function renderBalanco(){
     const desp=despesas.filter(d=>d.placa===p && inPer(d.vencimento,de,ate)).reduce((s,d)=>s+(+d.valor||0),0);
     const frs=fretes.filter(f=>f.placa===p && freteNoPer(f,de,ate));
     const rec=frs.reduce((s,f)=>s+(+f.valor_total||0),0);
-    return {p, rec, desp, res:rec-desp, nf:frs.length};
+    return {p, rec, desp, res:rec-desp, nf:frs.reduce((s,f)=>s+Math.max(1,parseInt(f.viagens,10)||1),0)};
   }).filter(r=>r.rec!==0 || r.desp!==0);
   rows.sort((a,b)=>b.res-a.res);
   const tRec=rows.reduce((s,r)=>s+r.rec,0), tDesp=rows.reduce((s,r)=>s+r.desp,0), tRes=tRec-tDesp;

@@ -203,6 +203,8 @@ textarea{resize:vertical;min-height:60px;}
           <div class="field"><label>Produto / carga</label><input id="f_produto" placeholder="Soja, milho, adubo…"></div>
           <div class="field"><label>Origem</label><input id="f_origem" placeholder="Cidade/fazenda de origem"></div>
           <div class="field"><label>Destino</label><input id="f_destino" placeholder="Cidade/destino"></div>
+          <div class="field"><label>Tipo de frete</label><select id="f_tipo" onchange="toggleViagens()"><option value="SIMPLES">Simples (1 viagem)</option><option value="AGRUPADO">Agrupado (várias viagens)</option></select></div>
+          <div class="field" id="viagens-wrap" style="display:none"><label>Nº de viagens <span class="req">★</span></label><input type="number" min="1" step="1" id="f_viagens" value="1" placeholder="Ex.: 3"></div>
         </div>
       </div>
 
@@ -536,8 +538,11 @@ async function salvar(){
   if(total<=0){ toast('Informe o valor total.',true); return; }
   if(!parcelas.length){ toast('Informe ao menos uma parcela com valor.',true); return; }
 
+  const tipoFrete = $('f_tipo').value==='AGRUPADO'?'AGRUPADO':'SIMPLES';
+  const nViagens = tipoFrete==='AGRUPADO'? Math.max(1, parseInt($('f_viagens').value,10)||1) : 1;
   const header={
     cliente:cliente.toUpperCase(), origem:$('f_origem').value.trim()||null, destino:$('f_destino').value.trim()||null,
+    tipo:tipoFrete, viagens:nViagens,
     produto:$('f_produto').value.trim()||null, placa, motorista:$('f_motorista').value.trim()||null,
     valor_total:total, data_carregamento:$('f_carreg').value||null, data_descarregamento:$('f_descarreg').value||null,
     data_pagamento:$('f_pagamento').value||null,
@@ -698,6 +703,7 @@ function editarFrete(id){
   $('f_peso').value=f.peso||''; $('f_preco').value=f.preco_ton||'';
   $('f_desc1').value=f.desconto1||''; $('f_desc2').value=f.desconto2||''; $('f_desc1_obs').value=f.desconto1_obs||''; $('f_desc2_obs').value=f.desconto2_obs||'';
   $('f_total').value=f.valor_total||''; $('f_obs').value=f.observacao||'';
+  $('f_tipo').value=(f.tipo==='AGRUPADO')?'AGRUPADO':'SIMPLES'; $('f_viagens').value=f.viagens||1; toggleViagens();
   keepFreteAnexos=anexoArr(f.anexo); pendingFreteAnexos=[]; $('f_anexo').value=''; renderFreteChips();
   $('parcelas-box').innerHTML='';
   const ps=parcelasDe(id);
@@ -711,7 +717,13 @@ function limparForm(){
   editingFrete=null; $('form-title').textContent='Novo frete';
   ['f_cliente','f_produto','f_origem','f_destino','f_placa','f_motorista','f_carreg','f_descarreg','f_pagamento','f_peso','f_preco','f_total','f_obs','f_desc1','f_desc2','f_desc1_obs','f_desc2_obs'].forEach(id=>{ if($(id))$(id).value=''; });
   keepFreteAnexos=[]; pendingFreteAnexos=[]; if($('f_anexo'))$('f_anexo').value=''; renderFreteChips();
+  if($('f_tipo'))$('f_tipo').value='SIMPLES'; if($('f_viagens'))$('f_viagens').value=1; toggleViagens();
   initParcelas(); $('btnSalvar').textContent='✓ Salvar frete';
+}
+function toggleViagens(){
+  const ag=$('f_tipo') && $('f_tipo').value==='AGRUPADO';
+  if($('viagens-wrap')) $('viagens-wrap').style.display=ag?'':'none';
+  if(!ag && $('f_viagens')) $('f_viagens').value=1;
 }
 
 /* ===================== NAV ===================== */
