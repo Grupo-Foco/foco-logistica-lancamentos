@@ -96,8 +96,9 @@ tfoot td{padding:12px 14px;font-weight:700;border-top:2px solid var(--creme-dark
   </div>
 
   <div class="toolbar">
-    <div class="field"><label>Período de</label><input type="date" id="f-de" onchange="render()"></div>
-    <div class="field"><label>Período até</label><input type="date" id="f-ate" onchange="render()"></div>
+    <div class="field"><label>Mês fechado</label><select id="f-mes" onchange="selMes()"><option value="">— escolher —</option></select></div>
+    <div class="field"><label>Período de</label><input type="date" id="f-de" onchange="dataManual()"></div>
+    <div class="field"><label>Período até</label><input type="date" id="f-ate" onchange="dataManual()"></div>
     <div class="field"><label>Caminhão</label><select id="f-placa" onchange="render()"><option value="">Todos</option></select></div>
     <div class="field" id="cat-field"><label>Categoria</label><select id="f-cat" onchange="render()"><option value="">Todas</option></select></div>
     <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn btn-ghost btn-sm" onclick="limparFiltros()">Limpar</button></div>
@@ -155,12 +156,29 @@ async function carregar(){
     $('f-placa').innerHTML='<option value="">Todos</option>'+placas.map(p=>`<option>${esc(p)}</option>`).join('');
     const cats=[...new Set(despesas.map(d=>d.tipo_despesa).filter(Boolean))].sort();
     $('f-cat').innerHTML='<option value="">Todas</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+    preencherMeses();
     setSync('online'); render();
   }catch(e){ console.error(e); setSync('err'); toast('Erro ao carregar dados.',true); }
   finally{ showLoading(false); }
 }
 
 function filtros(){ return {de:$('f-de').value, ate:$('f-ate').value, placa:$('f-placa').value, cat:$('f-cat').value}; }
+function preencherMeses(){
+  const sel=$('f-mes'); if(!sel) return;
+  const MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const h=new Date(); let o='<option value="">— escolher —</option>';
+  for(let i=1;i<=12;i++){ const d=new Date(h.getFullYear(), h.getMonth()-i, 1); const y=d.getFullYear(), m=d.getMonth();
+    o+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${MES[m]} ${y}</option>`; }
+  sel.innerHTML=o;
+}
+function selMes(){
+  const v=$('f-mes').value; if(!v){ render(); return; }
+  const [y,m]=v.split('-').map(Number); const mm=String(m).padStart(2,'0');
+  const fim=new Date(y,m,0).getDate();
+  $('f-de').value=`${y}-${mm}-01`; $('f-ate').value=`${y}-${mm}-${String(fim).padStart(2,'0')}`;
+  render();
+}
+function dataManual(){ if($('f-mes'))$('f-mes').value=''; render(); }
 function inPer(dtISO, de, ate){ if(!dtISO) return !de&&!ate?true:false; const x=String(dtISO).slice(0,10); return (!de||x>=de)&&(!ate||x<=ate); }
 function freteNoPer(f, de, ate){
   if(!de && !ate) return true;
@@ -184,7 +202,7 @@ function setMode(m){
   $('cat-field').style.display = (m==='caminhao'||m==='balanco') ? 'none' : '';
   render();
 }
-function limparFiltros(){ $('f-de').value=''; $('f-ate').value=''; $('f-placa').value=''; $('f-cat').value=''; render(); }
+function limparFiltros(){ if($('f-mes'))$('f-mes').value=''; $('f-de').value=''; $('f-ate').value=''; $('f-placa').value=''; $('f-cat').value=''; render(); }
 
 function perLabel(){ const {de,ate}=filtros(); if(de&&ate) return `${fdate(de)} a ${fdate(ate)}`; if(de) return `desde ${fdate(de)}`; if(ate) return `até ${fdate(ate)}`; return 'todo o período'; }
 
