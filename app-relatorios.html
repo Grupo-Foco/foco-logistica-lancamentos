@@ -285,7 +285,8 @@ function renderBalanco(){
     <td class="right mono ${r.res>=0?'pos':'neg'}">${money(r.res)} ${r.res>=0?'▲':'▼'}</td></tr>`).join('') : `<tr><td colspan="5"><div class="empty">Sem dados no período. (As receitas vêm dos fretes cadastrados em Receitas.)</div></td></tr>`;
   $('rep-foot').innerHTML=`<tr><td>TOTAL</td><td></td><td class="right mono">${money(tRec)}</td><td class="right mono">${money(tDesp)}</td><td class="right mono ${tRes>=0?'pos':'neg'}">${money(tRes)}</td></tr>`;
   exportData={ nome:'balanco_caminhao', head:['Placa','Fretes','Receita','Despesa','Resultado'],
-    rows:rows.map(r=>[r.p,r.nf,r.rec,r.desp,r.res]), money:[2,3,4], signCol:4 };
+    rows:rows.map(r=>[r.p,r.nf,r.rec,r.desp,r.res]), money:[2,3,4], signCol:4,
+    resumo:{rec:tRec, desp:tDesp, res:tRes} };
 }
 
 /* -------- Exportar CSV -------- */
@@ -328,7 +329,23 @@ function exportarPDF(){
   const titulo=$('rep-titulo').textContent, sub=$('rep-sub').textContent;
   doc.setFontSize(14); doc.setTextColor(39,64,31); doc.text('FOCO logística — '+titulo, 40, 40);
   doc.setFontSize(10); doc.setTextColor(120); doc.text(sub||'', 40, 58);
-  doc.autoTable({ startY:72, head:[exportData.head], body:exportData.rows,
+  let _startY=72;
+  if(exportData.resumo){
+    const R=exportData.resumo, bx=40, gap=16, bw=(762-2*gap)/3, bh=54, by=68;
+    const cards=[
+      {l:'RECEITAS (FRETES)', v:R.rec, col:[31,120,60]},
+      {l:'DESPESAS', v:R.desp, col:[176,122,12]},
+      {l:'RESULTADO', v:R.res, col:R.res>=0?[31,120,60]:[178,40,30]}
+    ];
+    cards.forEach((c,i)=>{ const x=bx+i*(bw+gap);
+      doc.setFillColor(246,246,240); doc.setDrawColor(222,222,210); doc.setLineWidth(0.5); doc.roundedRect(x,by,bw,bh,6,6,'FD');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,120,120); doc.text(c.l, x+14, by+20);
+      doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(c.col[0],c.col[1],c.col[2]); doc.text(fmtMoney(c.v), x+14, by+42);
+    });
+    doc.setFont('helvetica','normal');
+    _startY=by+bh+16;
+  }
+  doc.autoTable({ startY:_startY, head:[exportData.head], body:exportData.rows,
     styles:{fontSize:8, cellPadding:4, lineWidth:0.5, lineColor:[210,208,196]}, headStyles:{fillColor:[39,64,31], lineWidth:0.5, lineColor:[255,255,255]},
     alternateRowStyles:{fillColor:[243,242,234]},
     didParseCell:function(data){
