@@ -92,7 +92,7 @@ tbody tr:hover{background:var(--creme);}
 </header>
 
 <div class="wrap">
-  <div class="page-h"><h1>Comissionamento</h1><p>Área de gestão. O comissionamento de cada motorista é gerado automaticamente dos fretes lançados.</p></div>
+  <div class="page-h"><h1>Comissionamento</h1><p>Área de gestão. Comissão gerada automaticamente dos fretes lançados. Fechamento do mês = dia 26 do mês anterior a 25 do mês selecionado.</p></div>
 
   <div class="modes">
     <button class="mode active" id="m-comiss" onclick="setMode('comiss')">Comissionamento</button>
@@ -172,17 +172,20 @@ function preencherMeses(){
     o+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${MES[m]} ${y}</option>`; }
   sel.innerHTML=o;
 }
+function isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function selMes(){
   const v=$('f-mes').value; if(!v){ renderComiss(); return; }
-  const [y,m]=v.split('-').map(Number); const mm=String(m).padStart(2,'0');
-  const fim=new Date(y,m,0).getDate();
-  $('f-de').value=`${y}-${mm}-01`; $('f-ate').value=`${y}-${mm}-${String(fim).padStart(2,'0')}`;
+  const [y,m]=v.split('-').map(Number);
+  /* fechamento 26 a 25: dia 26 do mes anterior ate dia 25 do mes selecionado */
+  const de=new Date(y, m-2, 26);
+  const ate=new Date(y, m-1, 25);
+  $('f-de').value=isoDate(de); $('f-ate').value=isoDate(ate);
   renderComiss();
 }
 function dataManual(){ if($('f-mes'))$('f-mes').value=''; renderComiss(); }
 function limparFiltros(){ if($('f-mes'))$('f-mes').value=''; $('f-de').value=''; $('f-ate').value=''; renderComiss(); }
 function periodo(){ return {de:$('f-de').value, ate:$('f-ate').value}; }
-function competencia(){ const de=$('f-de').value; return de?de.slice(0,7):(new Date().toISOString().slice(0,7)); }
+function competencia(){ const v=$('f-mes').value; if(v) return v; const ate=$('f-ate').value; return ate?ate.slice(0,7):(new Date().toISOString().slice(0,7)); }
 function freteNoPer(f,de,ate){ const d=(f.data_carregamento||'').slice(0,10); if(!d) return false; return (!de||d>=de)&&(!ate||d<=ate); }
 function compLabel(){ const v=$('f-mes').value; if(v){ const t=$('f-mes').options[$('f-mes').selectedIndex].text; return t; } const {de,ate}=periodo(); if(de||ate) return `${fdate(de)} a ${fdate(ate)}`; return 'Todo o período'; }
 
