@@ -182,6 +182,7 @@ textarea{resize:vertical;min-height:60px;}
     <button class="nav-tab" onclick="location.href='app.html'">▣ Lançamentos</button>
     <button class="nav-tab" onclick="location.href='app-posicionamento.html'">◎ Posicionamento</button>
     <button class="nav-tab brown" id="btn-endiv" style="display:none" onclick="location.href='app-endividamento.html'">◷ Endividamento</button>
+    <button class="nav-tab brown" id="btn-comiss" style="display:none" onclick="location.href='app-comissionamento.html'">$ Comissionamento</button>
     <button class="btn-h" id="btn-config" style="display:none" onclick="location.href='app-config.html'">⚙ Config</button>
     <button class="btn-h" onclick="sair()">⎋ Sair</button>
   </div>
@@ -349,6 +350,7 @@ function sair(){ sessionStorage.clear(); location.href='index.html'; }
 if(currentRole!=='gestor' && currentPerms.receitas_bloqueado===true){ alert('Sem acesso à área de Receitas.'); location.href='app.html'; }
 (function(){
   document.getElementById('userBadge').textContent=currentNome;
+  if(currentRole==='gestor') document.getElementById('btn-comiss').style.display='';
   if(hasPerm('endividamento')) document.getElementById('btn-endiv').style.display='';
   if(hasPerm('configuracoes')) document.getElementById('btn-config').style.display='';
 })();
